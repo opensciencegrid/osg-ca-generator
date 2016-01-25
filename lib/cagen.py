@@ -75,10 +75,10 @@ class CA(object):
         host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
         host_request = "host_req"
 
+        # Generate host request and key (in DER format)
+        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_request, '-keyout', host_pk_der, '-subj',
+                      host_subject), 'generate host cert request')
         try:
-            # Generate host key (in DER format)
-            _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_request, '-keyout', host_pk_der, '-subj',
-                          host_subject), 'generate host cert request')
             # Run the private key through RSA to get proper format (-keyform doesn't work in openssl > 0.9.8)
             _run_command(('openssl', 'rsa', '-in', host_pk_der, '-outform', 'PEM', '-out', host_keypath),
                          'generate host private key')
@@ -91,10 +91,8 @@ class CA(object):
                           '-outdir', '.', '-batch'),
                          'generate host cert')
         finally:
-            # Cleanup
             os.remove(host_pk_der)
             os.remove(host_request)
-            # os.remove(_SERIAL_NUM + ".pem")
 
     def usercert(self, username, password, days=10, force=False):
         """
@@ -116,20 +114,23 @@ class CA(object):
         if not os.path.exists(globus_dir):
             os.makedirs(globus_dir, 0755)
 
-        # Generate user key
+        # Generate user request and key
         _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", user_keypath, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
         os.chmod(user_keypath, 0400)
 
-        # Generate user cert
-        _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path, '-keyfile',
-                      self.keypath, '-days', str(days), '-policy', 'policy_anything', '-preserveDN', '-extfile',
-                      self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out', user_path, '-outdir', '.',
-                      '-batch'), "generate user cert")
+        try:
+            # Generate user cert
+            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path, '-keyfile',
+                          self.keypath, '-days', str(days), '-policy', 'policy_anything', '-preserveDN', '-extfile',
+                          self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out', user_path, '-outdir', '.',
+                          '-batch'), "generate user cert")
 
-        user = pwd.getpwnam(username)
-        for path in (user_path, user_keypath, globus_dir):
-            os.chown(path, user.pw_uid, user.pw_gid)
+            user = pwd.getpwnam(username)
+            for path in (user_path, user_keypath, globus_dir):
+                os.chown(path, user.pw_uid, user.pw_gid)
+        finally:
+            os.remove(user_request)
 
     def crl(self, days=10):
         """
@@ -151,7 +152,8 @@ class CA(object):
     keyUsage=critical,digitalSignature,keyEncipherment,dataEncipherment
     extendedKeyUsage=serverAuth,clientAuth
     certificatePolicies=1.2.840.113612.5.2.2.1,2.16.840.1.114412.31.1.1.1,1.2.840.113612.5.2.3.3.2
-    basicConstraints=critical,CA:false""" % _get_hostname
+    basicConstraints=critical,CA:false
+""" % _get_hostname
 
         openssl_config = open('/etc/pki/tls/openssl.cnf', 'r')
         config_contents = openssl_config.read()
@@ -167,8 +169,9 @@ class CA(object):
         _write_file(self._CONFIG_PATH, config_contents)
         _write_file(self._EXT_CONFIG_PATH, ext_contents)
         _write_file(openssl_dir + "index.txt", "")
+        _write_file(openssl_dir + "index.txt.attr", "unique_subject = no\n") # TODO: Implement cert revocation instead
         _write_file(openssl_dir + "serial", self._SERIAL_NUM)
-        _write_file(openssl_dir + "crlnumber", "01")
+        _write_file(openssl_dir + "crlnumber", "01\n")
 
     def _ca_support_files(self):
         """Place the namespace, signing_policy, and hash symlinks required by the CA"""
