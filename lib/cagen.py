@@ -1,5 +1,6 @@
 """Create DigiCert-like OSG test CAs and certificates"""
 
+import errno
 import os
 import pwd
 import re
@@ -217,8 +218,12 @@ class CA(object):
                  ('.r0', '.r0')]
         for subject_hash in hashes:
             for source_ext, link_ext in links:
-                os.symlink(ca_name + source_ext,
-                           os.path.join(self._CERTS_DIR, subject_hash + link_ext))
+                try:
+                    os.symlink(ca_name + source_ext,
+                               os.path.join(self._CERTS_DIR, subject_hash + link_ext))
+                except OSError, e: 
+                    if e.errno == errno.EEXIST:
+                        continue # safe to skip if symlink already exists
 
 def certificate_info(path):
     """Extracts and returns the subject and issuer from an X.509 certificate."""
