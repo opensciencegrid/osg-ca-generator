@@ -29,6 +29,7 @@ class CA(object):
         force - will overwrite any existing certs and keys if set to True
         """
         self.subject = subject
+        self.created = False
         try:
             basename = re.search(r'.*\/CN=([^\/]*)', subject).group(1).replace(' ', '-')
         except AttributeError:
@@ -56,6 +57,7 @@ class CA(object):
         # Add supporting CA files
         self._ca_support_files()
         self.crl()
+        self.created = True
 
     @classmethod
     def load(cls, ca_path):
@@ -73,7 +75,7 @@ class CA(object):
         """
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         if os.path.exists(host_path) and not force:
-            return
+            return None, None, None
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
         host_pk_der = "hostkey.der"
 
@@ -100,6 +102,7 @@ class CA(object):
         finally:
             os.remove(host_pk_der)
             os.remove(host_request)
+        return host_subject, host_path, host_keypath
 
     def usercert(self, username, password, days=10, force=False):
         """
@@ -112,7 +115,7 @@ class CA(object):
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
         if os.path.exists(user_path) and not force:
-            return
+            return None, None, None
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
         user_subject = self._subject_base + '/OU=People/CN=' + username
         user_request = 'user_req'
@@ -139,6 +142,7 @@ class CA(object):
                 os.chown(path, user.pw_uid, user.pw_gid)
         finally:
             os.remove(user_request)
+        return user_subject, user_path, user_keypath
 
     def crl(self, days=10):
         """
@@ -150,6 +154,7 @@ class CA(object):
         command = ("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path, "-keyfile",
                    self.keypath, "-crldays", str(days), "-out", crl_path)
         _run_command(command, "generate CRL")
+        return crl_path
 
     def _write_openssl_config(self):
         """Place the necessary openssl config required to mimic DigiCert"""
