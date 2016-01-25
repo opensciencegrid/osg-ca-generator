@@ -11,6 +11,9 @@ class CA(object):
     """
     DigiCert-like certificate authorities (CAs) that can be used to generate
     host or user certificates.
+
+    Pre-existing CAs can be loaded via the subject name and __init__()
+    (without the force option) or by its path with load().
     """
     _GRID_SEC_DIR = '/etc/grid-security/'
     _CERTS_DIR = os.path.join(_GRID_SEC_DIR, 'certificates')
@@ -22,8 +25,8 @@ class CA(object):
         """
         Create a CA (and crl) with the given subject.
 
-        'days' specifies the number of days before the certificate expires
-        'force' will overwrite any existing certs and keys if set to True
+        days - specifies the number of days before the certificate expires
+        force - will overwrite any existing certs and keys if set to True
         """
         self.subject = subject
         try:
@@ -43,7 +46,9 @@ class CA(object):
             os.makedirs(self._CERTS_DIR, 0755)
 
         # Generate the CA
+        print 'Writing CA private key to %s...' % self.keypath
         _run_command(('openssl', 'genrsa', '-out', self.keypath, '2048'), 'generate CA private key')
+        print 'Writing CA to %s...' % self.path
         _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-out', self.path, '-key',
                       self.keypath, '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
                      'generate CA')
@@ -63,8 +68,8 @@ class CA(object):
         Creates a host certificate (hostcert.pem) and host key (hostkey.pem)
         in /etc/grid-security from the given CA instance.
 
-        'days' specifies the number of days before the certificate expires
-        'force' will overwrite any existing certs and keys if set to True
+        days - specifies the number of days before the certificate expires
+        force - will overwrite any existing certs and keys if set to True
         """
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         if os.path.exists(host_path) and not force:
@@ -80,15 +85,17 @@ class CA(object):
                       host_subject), 'generate host cert request')
         try:
             # Run the private key through RSA to get proper format (-keyform doesn't work in openssl > 0.9.8)
+            print 'Writing host private key to %s...' % host_keypath
             _run_command(('openssl', 'rsa', '-in', host_pk_der, '-outform', 'PEM', '-out', host_keypath),
                          'generate host private key')
             os.chmod(host_keypath, 0400)
 
             # Generate host cert
+            print 'Writing host certificate to %s...' % host_path
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
-                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything', '-preserveDN',
-                          '-extfile', self._EXT_CONFIG_PATH, '-in', host_request, '-notext', '-out', host_path,
-                          '-outdir', '.', '-batch'),
+                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
+                          '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', host_request, '-notext', '-out',
+                          host_path, '-outdir', '.', '-batch'),
                          'generate host cert')
         finally:
             os.remove(host_pk_der)
@@ -99,9 +106,8 @@ class CA(object):
         Creates a user cert (usercert.pem) and user key (userkey.pem)
         in ~username/.globus/ from the given CA instance.
 
-        'password' specifies the password to use for the user's private key
-        'days' specifies the number of days before the certificate expires
-        'force' will overwrite any existing certs and keys if set to True
+        days - specifies the number of days before the certificate expires
+        force - will overwrite any existing certs and keys if set to True
         """
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
@@ -115,16 +121,18 @@ class CA(object):
             os.makedirs(globus_dir, 0755)
 
         # Generate user request and key
+        print 'Writing user private key to %s...' % user_keypath
         _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", user_keypath, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
         os.chmod(user_keypath, 0400)
 
         try:
             # Generate user cert
-            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path, '-keyfile',
-                          self.keypath, '-days', str(days), '-policy', 'policy_anything', '-preserveDN', '-extfile',
-                          self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out', user_path, '-outdir', '.',
-                          '-batch'), "generate user cert")
+            print 'Writing user certificate to %s...' % user_path
+            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
+                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
+                          '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out',
+                          user_path, '-outdir', '.', '-batch'), "generate user cert")
 
             user = pwd.getpwnam(username)
             for path in (user_path, user_keypath, globus_dir):
@@ -136,7 +144,7 @@ class CA(object):
         """
         Create CRL file for the CA instance
 
-        'days' specifies the number of days before the certificate expires
+        days - specifies the number of days before the certificate expires
         """
         crl_path = os.path.splitext(self.path)[0] + '.r0'
         command = ("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path, "-keyfile",
