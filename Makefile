@@ -17,7 +17,7 @@ SBIN_FILES := bin/osg-ca-gen
 INSTALL_SBIN_DIR := usr/sbin
 PYTHON_LIB_FILES := lib/cagen.py
 
-DIST_FILES := $(SBIN_FILES) $(PYTHON_LIB_FILES) Makefile
+DIST_FILES := bin/ lib/ Makefile
 
 
 # ------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ $(TARBALL_NAME): $(DIST_FILES)
 	$(eval TEMP_DIR := $(shell mktemp -d -p . $(DIST_DIR_PREFIX)XXXXXXXXXX))
 	mkdir -p $(TEMP_DIR)/$(TARBALL_DIR)
 	cp -pr $(DIST_FILES) $(TEMP_DIR)/$(TARBALL_DIR)/
-	sed -i -e 's/##VERSION##/$(VERSION)/g' $(TEMP_DIR)/$(TARBALL_DIR)/osg-ca-gen
+	sed -i -e 's/##VERSION##/$(VERSION)/g' $(TEMP_DIR)/$(TARBALL_DIR)/$(SBIN_FILES)
 	tar czf $(TARBALL_NAME) -C $(TEMP_DIR) $(TARBALL_DIR)
 	rm -rf $(TEMP_DIR)
 
@@ -80,4 +80,3 @@ endif
 
 check:
 	pylint -E osg-test $(PYTHON_LIB_FILES) $(SBIN_FILES)
-
