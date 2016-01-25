@@ -97,7 +97,7 @@ class CA(object):
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
                           '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
                           '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', host_request, '-notext', '-out',
-                          host_path, '-outdir', '.', '-batch'),
+                          host_path, '-batch'),
                          'generate host cert')
         finally:
             os.remove(host_pk_der)
@@ -135,7 +135,7 @@ class CA(object):
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
                           '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
                           '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out',
-                          user_path, '-outdir', '.', '-batch'), "generate user cert")
+                          user_path, '-batch'), "generate user cert")
 
             user = pwd.getpwnam(username)
             for path in (user_path, user_keypath, globus_dir):
