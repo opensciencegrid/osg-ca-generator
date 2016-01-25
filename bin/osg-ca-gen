@@ -1,0 +1,21 @@
+#!/bin/env python
+
+from cagen import CA
+from optparse import OptionParser
+
+def main():
+    p = OptionParser('usage: %prog [options]',
+                     version='%prog ##VERSION##',
+                     description="Generate CA's ")
+
+    p.add_option('-e', '--expire-days', action='store', default=10, type='int', dest='days',
+                 help='The number of days before generated CAs or certificates expire')
+    p.add_option('-f', '--force', action='store_true', default=False, dest='force',
+                 help='Overwrite any existing CAs or certificates')
+    opts, _ = p.parse_args()
+
+    test_ca = CA('/DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA', opts.days, opts.force)
+    test_ca.hostcert(opts.days, opts.force)
+
+if __name__ == '__main__':
+    main()
