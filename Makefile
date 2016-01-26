@@ -1,11 +1,11 @@
-# Makefile for osg-ca-gen. Lifted from osg-test
+# Makefile for osg-ca-generator. Lifted from osg-test
 
 
 # ------------------------------------------------------------------------------
 # Release information: Update for each release
 # ------------------------------------------------------------------------------
 
-PACKAGE := osg-ca-gen
+PACKAGE := osg-ca-generator
 VERSION := 1.0.0
 
 
@@ -13,7 +13,7 @@ VERSION := 1.0.0
 # Other configuration: May need to change for a release
 # ------------------------------------------------------------------------------
 
-SBIN_FILES := bin/osg-ca-gen
+SBIN_FILES := bin/osg-ca-generator
 INSTALL_SBIN_DIR := usr/sbin
 PYTHON_LIB_FILES := lib/cagen.py
 
