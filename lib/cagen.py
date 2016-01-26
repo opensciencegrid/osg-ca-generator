@@ -65,17 +65,17 @@ class CA(object):
         ca_subject, _ = certificate_info(ca_path)
         return cls(ca_subject)
 
-    def hostcert(self, days=10, force=False):
+    def hostcert(self, days=10):
         """
         Creates a host certificate (hostcert.pem) and host key (hostkey.pem)
         in /etc/grid-security from the given CA instance.
 
         days - specifies the number of days before the certificate expires
-        force - will overwrite any existing certs and keys if set to True
+
+        Returns strings:
+        Host certificate subject, host certificate path, host certificate key path
         """
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
-        if os.path.exists(host_path) and not force:
-            return None, None, None
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
         host_pk_der = "hostkey.der"
 
@@ -104,18 +104,18 @@ class CA(object):
             os.remove(host_request)
         return host_subject, host_path, host_keypath
 
-    def usercert(self, username, password, days=10, force=False):
+    def usercert(self, username, password, days=10):
         """
         Creates a user cert (usercert.pem) and user key (userkey.pem)
         in ~username/.globus/ from the given CA instance.
 
         days - specifies the number of days before the certificate expires
-        force - will overwrite any existing certs and keys if set to True
+
+        Returns strings:
+        User certificate subject, user certificate path, user certificate key path
         """
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
-        if os.path.exists(user_path) and not force:
-            return None, None, None
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
         user_subject = self._subject_base + '/OU=People/CN=' + username
         user_request = 'user_req'
@@ -156,9 +156,11 @@ class CA(object):
         _run_command(command, "generate CRL")
         return crl_path
 
+    #TODO: Implement cleanup function
+
     def _write_openssl_config(self):
         """Place the necessary openssl config required to mimic DigiCert"""
-        openssl_dir = '/etc/pki/CA/'
+        openssl_dir = '/etc/pki/CA/' # TODO: This may need to be unique for each CA
         ext_contents = """authorityKeyIdentifier=keyid,issuer
     subjectKeyIdentifier=hash
     subjectAltName=DNS:%s

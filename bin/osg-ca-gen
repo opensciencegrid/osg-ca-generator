@@ -1,5 +1,6 @@
 #!/bin/env python
 
+import os
 from cagen import CA
 from optparse import OptionParser
 
@@ -15,7 +16,9 @@ def main():
     opts, _ = p.parse_args()
 
     test_ca = CA('/DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA', opts.days, opts.force)
-    test_ca.hostcert(opts.days, opts.force)
+    host_path = '/etc/grid-security/hostcert.pem'
+    if not os.path.exists(host_path) or opts.force:
+        test_ca.hostcert(opts.days)
 
 if __name__ == '__main__':
     main()
