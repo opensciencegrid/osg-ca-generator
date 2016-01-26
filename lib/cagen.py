@@ -168,7 +168,7 @@ class CA(object):
     extendedKeyUsage=serverAuth,clientAuth
     certificatePolicies=1.2.840.113612.5.2.2.1,2.16.840.1.114412.31.1.1.1,1.2.840.113612.5.2.3.3.2
     basicConstraints=critical,CA:false
-""" % _get_hostname
+""" % _get_hostname()
 
         openssl_config = open('/etc/pki/tls/openssl.cnf', 'r')
         config_contents = openssl_config.read()
