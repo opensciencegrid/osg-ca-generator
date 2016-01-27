@@ -43,8 +43,11 @@ class CA(object):
 
         # Place necessary config and folders for CA generation
         self._write_openssl_config()
-        if not os.path.exists(self._CERTS_DIR):
-            os.makedirs(self._CERTS_DIR, 0755)
+        try:
+            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0755)
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                pass
 
         # Generate the CA
         print 'Writing CA private key to %s...' % self.keypath
@@ -120,8 +123,11 @@ class CA(object):
         user_subject = self._subject_base + '/OU=People/CN=' + username
         user_request = 'user_req'
 
-        if not os.path.exists(globus_dir):
+        try:
             os.makedirs(globus_dir, 0755)
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                pass
 
         # Generate user request and key
         print 'Writing user private key to %s...' % user_keypath
@@ -187,6 +193,13 @@ class CA(object):
         _write_file(openssl_dir + "index.txt.attr", "unique_subject = no\n") # TODO: Implement cert revocation instead
         _write_file(openssl_dir + "serial", self._SERIAL_NUM)
         _write_file(openssl_dir + "crlnumber", "01\n")
+
+        # openssl 0.x doesn't create this for us
+        try:
+            os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0755)
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                pass
 
     def _ca_support_files(self):
         """Place the namespace, signing_policy, and hash symlinks required by the CA"""
