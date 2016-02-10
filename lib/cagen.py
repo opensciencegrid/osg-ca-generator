@@ -50,9 +50,7 @@ class CA(object):
                 pass
 
         # Generate the CA
-        print 'Writing CA private key to %s...' % self.keypath
         _run_command(('openssl', 'genrsa', '-out', self.keypath, '2048'), 'generate CA private key')
-        print 'Writing CA to %s...' % self.path
         _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-out', self.path, '-key',
                       self.keypath, '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
                      'generate CA')
@@ -130,14 +128,12 @@ class CA(object):
                 pass
 
         # Generate user request and key
-        print 'Writing user private key to %s...' % user_keypath
         _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", user_keypath, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
         os.chmod(user_keypath, 0400)
 
         try:
             # Generate user cert
-            print 'Writing user certificate to %s...' % user_path
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
                           '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
                           '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out',

@@ -16,8 +16,13 @@ def main():
     opts, _ = p.parse_args()
 
     test_ca = CA('/DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA', opts.days, opts.force)
+    if test_ca.created:
+        print 'Created CA at %s...\n' % test_ca.path
+    else:
+        print 'Loaded CA at %s...\n' % test_ca.path
     host_path = '/etc/grid-security/hostcert.pem'
     if not os.path.exists(host_path) or opts.force:
+        print 'Writing hostcert to %s...\n' % host_path
         test_ca.hostcert(opts.days)
 
 if __name__ == '__main__':
