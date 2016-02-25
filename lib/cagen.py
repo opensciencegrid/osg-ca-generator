@@ -88,13 +88,11 @@ class CA(object):
                       host_subject), 'generate host cert request')
         try:
             # Run the private key through RSA to get proper format (-keyform doesn't work in openssl > 0.9.8)
-            print 'Writing host private key to %s...' % host_keypath
             _run_command(('openssl', 'rsa', '-in', host_pk_der, '-outform', 'PEM', '-out', host_keypath),
                          'generate host private key')
             os.chmod(host_keypath, 0400)
 
             # Generate host cert
-            print 'Writing host certificate to %s...' % host_path
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
                           '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
                           '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', host_request, '-notext', '-out',
