@@ -13,13 +13,23 @@ def main():
                  help='The number of days before generated CAs or certificates expire')
     p.add_option('-f', '--force', action='store_true', default=False, dest='force',
                  help='Overwrite any existing CAs or certificates')
+    p.add_option('--cilogon', action='store_true', default=False, dest='cilogon',
+                 help='Create CILogon-like CA and hostcert instead of DigiCert')
     opts, _ = p.parse_args()
 
-    test_ca = CA('/DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA', opts.days, opts.force)
+    # Create the CA
+    if opts.cilogon:
+        subject_prefix = '/DC=org/DC=opensciencegrid/C=US/'
+    else:
+        subject_prefix = '/DC=org/DC=Open Science Grid/'
+    test_ca = CA(subject_prefix + 'O=OSG Software/CN=OSG Test CA', opts.days, opts.force)
+
     if test_ca.created:
         print 'Created CA at %s...\n' % test_ca.path
     else:
         print 'Loaded CA at %s...\n' % test_ca.path
+
+    # Create hostcert
     host_path = '/etc/grid-security/hostcert.pem'
     if not os.path.exists(host_path) or opts.force:
         print 'Writing hostcert to %s...\n' % host_path
