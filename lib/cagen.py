@@ -219,17 +219,17 @@ class CA(object):
     # @(#)xyxyxyxy.namespaces
     # CA alias    : OSG-Test-CA
     #    subord_of: 
-    #    subjectDN: /DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA
-    #    hash     : xyxyxyxy
+    #    subjectDN: %s
+    #    hash     : %s
     #
-    TO Issuer "/DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA" \
-      PERMIT Subject "/DC=org/DC=Open Science Grid/.*"
-    """.replace('xyxyxyxy', hashes[0])
+    TO Issuer "%s" \
+      PERMIT Subject "%s/.*"
+    """ % (self.subject, hashes[0], self.subject, self._subject_base)
         signing_content = """# OSG Test CA Signing Policy
     access_id_CA		X509	'%s'
     pos_rights		globus	CA:sign
-    cond_subjects		globus	'"/DC=org/DC=Open Science Grid/*"'
-    """ % self.subject
+    cond_subjects		globus	'"%s/*"'
+    """ % (self.subject, self._subject_base)
 
         _write_file(os.path.join(self._CERTS_DIR, ca_name + '.namespaces'),
                     namespace_content)
