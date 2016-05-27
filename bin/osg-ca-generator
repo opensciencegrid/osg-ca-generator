@@ -20,9 +20,11 @@ def main():
     # Create the CA
     if opts.cilogon:
         subject_prefix = '/DC=org/DC=opensciencegrid/C=US/'
+        mimic = 'cilogon'
     else:
         subject_prefix = '/DC=org/DC=Open Science Grid/'
-    test_ca = CA(subject_prefix + 'O=OSG Software/CN=OSG Test CA', opts.days, opts.force)
+        mimic = 'digicert'
+    test_ca = CA(subject_prefix + 'O=OSG Software/CN=OSG Test CA', opts.days, opts.force, mimic)
 
     if test_ca.created:
         print 'Created CA at %s...\n' % test_ca.path
