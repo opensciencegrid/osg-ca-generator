@@ -21,14 +21,16 @@ class CA(object):
     _EXT_CONFIG_PATH = '/etc/pki/tls/osg-test-extensions.conf'
     _SERIAL_NUM = 'A1B2C3D4E5F6'
 
-    def __init__(self, subject, days=10, force=False):
+    def __init__(self, subject, days=10, force=False, mimic='digicert'):
         """
         Create a CA (and crl) with the given subject.
 
         days - specifies the number of days before the certificate expires
         force - will overwrite any existing certs and keys if set to True
+        mimic - type of CA/certs to mimic: 'cilogon' or 'digicert' (default)
         """
         self.subject = subject
+        self.mimic = mimic
         self.created = False
         try:
             basename = re.search(r'.*\/CN=([^\/]*)', subject).group(1).replace(' ', '-')
@@ -160,27 +162,37 @@ class CA(object):
 
     def _write_openssl_config(self):
         """Place the necessary openssl config required to mimic DigiCert"""
+        if self.mimic == 'cilogon':
+            ext_key_usage = 'critical, cRLSign, keyCertSign'
+            cert_policies = '1.3.6.1.4.1.34998.1.6'
+            key_id = ''
+            pathlen = ''
+        else:
+            ext_key_usage = 'critical, digitalSignature, cRLSign, keyCertSign'
+            cert_policies = '1.2.840.113612.5.2.2.1, 2.16.840.1.114412.31.1.1.1, 1.2.840.113612.5.2.3.3.2'
+            key_id = "authorityKeyIdentifier=keyid,issuer\nsubjectKeyIdentifier=hash\n"
+            pathlen = ', pathlen:0'
+
         openssl_dir = '/etc/pki/CA/' # TODO: This may need to be unique for each CA
-        ext_contents = """authorityKeyIdentifier=keyid,issuer
-    subjectKeyIdentifier=hash
-    subjectAltName=DNS:%s
-    keyUsage=critical,digitalSignature,keyEncipherment,dataEncipherment
-    extendedKeyUsage=serverAuth,clientAuth
-    certificatePolicies=1.2.840.113612.5.2.2.1,2.16.840.1.114412.31.1.1.1,1.2.840.113612.5.2.3.3.2
-    basicConstraints=critical,CA:false
-""" % _get_hostname()
+        ext_contents = """%ssubjectAltName=DNS:%s
+keyUsage=critical,digitalSignature,keyEncipherment,dataEncipherment
+extendedKeyUsage=serverAuth,clientAuth
+certificatePolicies=%s
+basicConstraints=critical,CA:false
+""" % (key_id, _get_hostname(), cert_policies)
 
         openssl_config = open('/etc/pki/tls/openssl.cnf', 'r')
         config_contents = openssl_config.read()
         openssl_config.close()
         replace_text = [("# crl_extensions	= crl_ext", "crl_extensions	= crl_ext"),
-                        ("basicConstraints = CA:true", "basicConstraints = critical, CA:true"),
+                        ("basicConstraints = CA:true", "basicConstraints = critical, CA:true%s" % pathlen),
                         ("# keyUsage = cRLSign, keyCertSign",
-                         "keyUsage = critical, digitalSignature, cRLSign, keyCertSign"),
+                         "keyUsage = %s" % ext_key_usage),
                         ("dir		= ../../CA		# Where everything is kept",
                          "dir		= %s		# Where everything is kept" % openssl_dir)]
         for (old, new) in replace_text:
             config_contents = config_contents.replace(old, new)
+
         _write_file(self._CONFIG_PATH, config_contents)
         _write_file(self._EXT_CONFIG_PATH, ext_contents)
         _write_file(openssl_dir + "index.txt", "")
@@ -219,17 +231,17 @@ class CA(object):
     # @(#)xyxyxyxy.namespaces
     # CA alias    : OSG-Test-CA
     #    subord_of: 
-    #    subjectDN: /DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA
-    #    hash     : xyxyxyxy
+    #    subjectDN: %s
+    #    hash     : %s
     #
-    TO Issuer "/DC=org/DC=Open Science Grid/O=OSG Test/CN=OSG Test CA" \
-      PERMIT Subject "/DC=org/DC=Open Science Grid/.*"
-    """.replace('xyxyxyxy', hashes[0])
+    TO Issuer "%s" \
+      PERMIT Subject "%s/.*"
+    """ % (self.subject, hashes[0], self.subject, self._subject_base)
         signing_content = """# OSG Test CA Signing Policy
     access_id_CA		X509	'%s'
     pos_rights		globus	CA:sign
-    cond_subjects		globus	'"/DC=org/DC=Open Science Grid/*"'
-    """ % self.subject
+    cond_subjects		globus	'"%s/*"'
+    """ % (self.subject, self._subject_base)
 
         _write_file(os.path.join(self._CERTS_DIR, ca_name + '.namespaces'),
                     namespace_content)
