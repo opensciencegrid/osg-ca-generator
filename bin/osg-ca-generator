@@ -1,23 +1,37 @@
 #!/bin/env python
 
+import pwd
 import os
+import sys
 from cagen import CA
 from optparse import OptionParser
 
 def main():
-    p = OptionParser('usage: %prog [options]',
+    p = OptionParser('%prog [options]',
                      version='%prog ##VERSION##',
-                     description="Generate CA's ")
+                     description='Generate or load pre-existing DigiCert-like ' + \
+                     'CAs and certificates for testing OSG software.')
 
-    p.add_option('-e', '--expire-days', action='store', default=10, type='int', dest='days',
-                 help='The number of days before generated CAs or certificates expire')
+    p.add_option('-e', '--expire-days', default=10, type='int', dest='days',
+                 help='The number of days before test CAs or certificates expire')
     p.add_option('-f', '--force', action='store_true', default=False, dest='force',
                  help='Overwrite any existing CAs or certificates')
     p.add_option('--cilogon', action='store_true', default=False, dest='cilogon',
-                 help='Create CILogon-like CA and hostcert instead of DigiCert')
+                 help='Create CILogon-like CAs and certificates instead')
+    p.add_option('--host', action='store_true', default=False, dest='host',
+                 help='Create a host certificate using the test CA')
+    p.add_option('-u', '--user', default='', dest='username',
+                 help='Create a user certificate for the specified user')
+    p.add_option('-p', '--pass', default='', dest='password',
+                 help='Set the user certificate\'s password')
     opts, _ = p.parse_args()
 
-    # Create the CA
+    if opts.password and not opts.username:
+        sys.exit('Missing user option')
+    elif opts.username and not opts.password:
+        sys.exit('Missing or empty password option')
+
+    # Create or load a pre-existing CA
     if opts.cilogon:
         subject_prefix = '/DC=org/DC=opensciencegrid/C=US/'
         mimic = 'cilogon'
@@ -27,15 +41,32 @@ def main():
     test_ca = CA(subject_prefix + 'O=OSG Software/CN=OSG Test CA', opts.days, opts.force, mimic)
 
     if test_ca.created:
-        print 'Created CA at %s...\n' % test_ca.path
+        ca_msg_verb = 'Created'
     else:
-        print 'Loaded CA at %s...\n' % test_ca.path
+        ca_msg_verb = 'Loaded'
+    print '%s CA at %s...' % (ca_msg_verb, test_ca.path)
 
-    # Create hostcert
-    host_path = '/etc/grid-security/hostcert.pem'
-    if not os.path.exists(host_path) or opts.force:
-        print 'Writing hostcert to %s...\n' % host_path
-        test_ca.hostcert(opts.days)
+    if opts.host:
+        # Create hostcert
+        host_path = '/etc/grid-security/hostcert.pem'
+        if not os.path.exists(host_path) or opts.force:
+            print 'Writing host cert to %s...' % host_path
+            test_ca.hostcert(opts.days)
+        else:
+            print 'Skipped writing host cert due to existing cert at %s' % host_path
+
+    if opts.username:
+        # Create user cert
+        try:
+            user = pwd.getpwnam(opts.username)
+        except KeyError:
+            sys.exit('User %s does not exist' % opts.username)
+        user_path = os.path.join(user.pw_dir, '.globus', 'usercert.pem')
+        if not os.path.exists(user_path) or opts.force:
+            print 'Writing user cert to %s...' % user_path
+            test_ca.usercert(opts.username, opts.password, opts.days)
+        else:
+            print 'Skipped writing user cert due to existing cert at %s' % user_path
 
 if __name__ == '__main__':
     main()
