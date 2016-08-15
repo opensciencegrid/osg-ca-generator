@@ -10,7 +10,7 @@ def main():
     p = OptionParser('%prog [options]',
                      version='%prog ##VERSION##',
                      description='Generate or load pre-existing DigiCert-like ' + \
-                     'CAs and certificates for testing OSG software.')
+                     'CAs for testing OSG software.')
 
     p.add_option('-e', '--expire-days', default=10, type='int', dest='days',
                  help='The number of days before test CAs or certificates expire')
@@ -21,7 +21,7 @@ def main():
     p.add_option('--host', action='store_true', default=False, dest='host',
                  help='Create a host certificate using the test CA')
     p.add_option('-u', '--user', default='', dest='username',
-                 help='Create a user certificate for the specified user')
+                 help='Create a user certificate for the specified user using the test CA')
     p.add_option('-p', '--pass', default='', dest='password',
                  help='Set the user certificate\'s password')
     opts, _ = p.parse_args()
