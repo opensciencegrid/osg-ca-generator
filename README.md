@@ -22,7 +22,7 @@ Options:
   --host                Create a host certificate using the test CA
   -u USER, --user=USER  Create a user certificate for the specified user using the test CA
   -p PASSWORD, --pass=PASSWORD
-                        Set the user certificate's password. Default: None
+                        Set the user certificate's password.
 ```
 
 Python Library
