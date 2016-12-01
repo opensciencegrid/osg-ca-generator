@@ -25,6 +25,27 @@ Options:
                         Set the user certificate's password.
 ```
 
+Example Usage
+--------------
+
+Create a dummy OSG CA:
+
+```
+osg-ca-generator
+```
+
+Create an OSG host cert, creating a new CA if necessary, otherwise using a pre-existing one:
+
+```
+osg-ca-generator --host
+```
+
+Create an OSG user cert for the user `foo` with the password `password`, creating a new CA if necessary, otherwise using a pre-existing one:
+
+```
+osg-ca-generator --user=foo --pass=password
+```
+
 Python Library
 --------------
 
