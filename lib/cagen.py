@@ -226,22 +226,23 @@ basicConstraints=critical,CA:false
 
         # Add signing policy and namespaces files
         namespace_content = """##############################################################################
-    #NAMESPACES-VERSION: 1.0
-    #
-    # @(#)xyxyxyxy.namespaces
-    # CA alias    : OSG-Test-CA
-    #    subord_of: 
-    #    subjectDN: %s
-    #    hash     : %s
-    #
-    TO Issuer "%s" \
-      PERMIT Subject "%s/.*"
-    """ % (self.subject, hashes[0], self.subject, self._subject_base)
+#NAMESPACES-VERSION: 1.0
+#
+# @(#)xyxyxyxy.namespaces
+# CA alias    : OSG-Test-CA
+#    subord_of:
+#    subjectDN: %s
+#    hash     : %s
+#
+TO Issuer "%s" \
+PERMIT Subject "%s/.*"
+""" % (self.subject, hashes[0], self.subject, self._subject_base)
+
         signing_content = """# OSG Test CA Signing Policy
-    access_id_CA		X509	'%s'
-    pos_rights		globus	CA:sign
-    cond_subjects		globus	'"%s/*"'
-    """ % (self.subject, self._subject_base)
+access_id_CA		X509	'%s'
+pos_rights		globus	CA:sign
+cond_subjects		globus	'"%s/*"'
+""" % (self.subject, self._subject_base)
 
         _write_file(os.path.join(self._CERTS_DIR, ca_name + '.namespaces'),
                     namespace_content)
