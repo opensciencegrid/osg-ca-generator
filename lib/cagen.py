@@ -31,6 +31,7 @@ class CA(object):
         """
         self.subject = subject
         self.mimic = mimic
+        self.days = days
         self.created = False
         try:
             basename = re.search(r'.*\/CN=([^\/]*)', subject).group(1).replace(' ', '-')
@@ -68,7 +69,7 @@ class CA(object):
         ca_subject, _ = certificate_info(ca_path)
         return cls(ca_subject)
 
-    def hostcert(self, days=10):
+    def hostcert(self, days=None):
         """
         Creates a host certificate (hostcert.pem) and host key (hostkey.pem)
         in /etc/grid-security from the given CA instance.
@@ -78,6 +79,9 @@ class CA(object):
         Returns strings:
         Host certificate subject, host certificate path, host certificate key path
         """
+        if days is None:
+            days = self.days
+
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
         host_pk_der = "hostkey.der"
@@ -105,7 +109,7 @@ class CA(object):
             os.remove(host_request)
         return host_subject, host_path, host_keypath
 
-    def usercert(self, username, password, days=10):
+    def usercert(self, username, password, days=None):
         """
         Creates a user cert (usercert.pem) and user key (userkey.pem)
         in ~username/.globus/ from the given CA instance.
@@ -115,6 +119,9 @@ class CA(object):
         Returns strings:
         User certificate subject, user certificate path, user certificate key path
         """
+        if days is None:
+            days = self.days
+
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
@@ -146,12 +153,15 @@ class CA(object):
             os.remove(user_request)
         return user_subject, user_path, user_keypath
 
-    def crl(self, days=10):
+    def crl(self, days=None):
         """
         Create CRL file for the CA instance
 
         days - specifies the number of days before the certificate expires
         """
+        if days is None:
+            days = self.days
+
         crl_path = os.path.splitext(self.path)[0] + '.r0'
         command = ("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path, "-keyfile",
                    self.keypath, "-crldays", str(days), "-out", crl_path)
