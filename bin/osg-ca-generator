@@ -16,8 +16,6 @@ def main():
                  help='The number of days before test CAs or certificates expire')
     p.add_option('-f', '--force', action='store_true', default=False, dest='force',
                  help='Overwrite any existing CAs or certificates')
-    p.add_option('--cilogon', action='store_true', default=False, dest='cilogon',
-                 help='Create CILogon-like CAs and certificates instead')
     p.add_option('--host', action='store_true', default=False, dest='host',
                  help='Create a host certificate using the test CA')
     p.add_option('-u', '--user', default='', dest='username',
@@ -34,13 +32,7 @@ def main():
         sys.exit('Missing or empty password option')
 
     # Create or load a pre-existing CA
-    if opts.cilogon:
-        subject_prefix = '/DC=org/DC=opensciencegrid/C=US/'
-        mimic = 'cilogon'
-    else:
-        subject_prefix = '/DC=org/DC=Open Science Grid/'
-        mimic = 'digicert'
-    test_ca = CA(subject_prefix + 'O=OSG Software/CN=OSG Test CA', opts.days, opts.force, mimic)
+    test_ca = CA('/DC=org/DC=opensciencegrid/C=US/O=OSG Software/CN=OSG Test CA', opts.days, opts.force)
 
     if opts.voms:
         test_ca.voms(opts.voms)
