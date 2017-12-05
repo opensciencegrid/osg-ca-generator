@@ -49,7 +49,7 @@ class CA(object):
         self._write_openssl_config()
         try:
             os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
-        except OSError as exc:
+        except EnvironmentError as exc:
             if exc.errno == errno.EEXIST:
                 pass
 
@@ -131,7 +131,7 @@ class CA(object):
         try:
             os.makedirs(globus_dir, 0o755)
             os.chown(globus_dir, user.pw_uid, user.pw_gid)
-        except OSError as exc:
+        except EnvironmentError as exc:
             if exc.errno == errno.EEXIST:
                 pass
 
@@ -211,7 +211,7 @@ basicConstraints=critical,CA:false
         # openssl 0.x doesn't create this for us
         try:
             os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0o755)
-        except OSError as exc:
+        except EnvironmentError as exc:
             if exc.errno == errno.EEXIST:
                 pass
 
@@ -267,8 +267,8 @@ cond_subjects		globus	'"%s/*"'
                 try:
                     os.symlink(ca_name + source_ext,
                                os.path.join(self._CERTS_DIR, subject_hash + link_ext))
-                except OSError, e: 
-                    if e.errno == errno.EEXIST:
+                except EnvironmentError as exc:
+                    if exc.errno == errno.EEXIST:
                         continue # safe to skip if symlink already exists
 
 def certificate_info(path):
@@ -280,7 +280,7 @@ def certificate_info(path):
     subject_issuer_re = r'subject\s*=\s*([^\n]+)\nissuer\s*=\s*([^\n]+)\n'
     matches = re.match(subject_issuer_re, stdout).groups()
     if matches is None:
-        raise OSError(status, stdout)
+        raise RuntimeError(status, stdout)
     subject, issuer = matches
     return (subject, issuer)
 
@@ -341,7 +341,7 @@ def _safe_move(new_file, target_path):
             os.remove(new_path)
             return
         os.rename(target_path, target_path + '.old')
-    except (IOError, OSError) as exc:
+    except EnvironmentError as exc:
         if exc.errno == errno.ENOENT:
             pass
         else:
