@@ -5,6 +5,7 @@ import os
 import pwd
 import re
 import socket
+import tempfile
 from subprocess import Popen, PIPE
 
 class CA(object):
@@ -47,16 +48,18 @@ class CA(object):
         # Place necessary config and folders for CA generation
         self._write_openssl_config()
         try:
-            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0755)
-        except OSError, e:
-            if e.errno == errno.EEXIST:
+            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
+        except EnvironmentError as exc:
+            if exc.errno == errno.EEXIST:
                 pass
 
         # Generate the CA
-        _run_command(('openssl', 'genrsa', '-out', self.keypath, '2048'), 'generate CA private key')
-        _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-out', self.path, '-key',
-                      self.keypath, '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
-                     'generate CA')
+        _, key_contents, _ = _run_command(('openssl', 'genrsa', '2048'), 'generate CA private key')
+        _write_file(self.keypath, key_contents, 0o400)
+        _, ca_contents, _ = _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-key', self.keypath,
+                                          '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
+                                         'generate CA')
+        _write_file(self.path, ca_contents)
 
         # Add supporting CA files
         self._ca_support_files()
@@ -84,29 +87,24 @@ class CA(object):
 
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
-        host_pk_der = "hostkey.der"
-
         host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
-        host_request = "host_req"
+        host_req = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR)
+        tmp_key = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR).name
 
         # Generate host request and key (in DER format)
-        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_request, '-keyout', host_pk_der, '-subj',
-                      host_subject), 'generate host cert request')
-        try:
-            # Run the private key through RSA to get proper format (-keyform doesn't work in openssl > 0.9.8)
-            _run_command(('openssl', 'rsa', '-in', host_pk_der, '-outform', 'PEM', '-out', host_keypath),
-                         'generate host private key')
-            os.chmod(host_keypath, 0400)
+        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_req.name, '-keyform', "PEM", '-keyout', tmp_key,
+                      '-subj', host_subject), 'generate host cert request')
+        os.chmod(tmp_key, 0o400)
+        _safe_move(tmp_key, host_keypath)
 
-            # Generate host cert
-            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
-                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
-                          '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', host_request, '-notext', '-out',
-                          host_path, '-batch'),
-                         'generate host cert')
-        finally:
-            os.remove(host_pk_der)
-            os.remove(host_request)
+        # Generate host cert
+        _, cert_contents, _ = _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert',
+                                            self.path, '-keyfile', self.keypath, '-days', str(days), '-policy',
+                                            'policy_anything', '-preserveDN', '-extfile', self._EXT_CONFIG_PATH,
+                                            '-in', host_req.name, '-notext', '-batch'), 'generate host cert')
+        _write_file(host_path, cert_contents)
+
+        host_req.close()
         return host_subject, host_path, host_keypath
 
     def usercert(self, username, password, days=None):
@@ -125,32 +123,33 @@ class CA(object):
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
+        user = pwd.getpwnam(username)
         user_subject = self._subject_base + '/OU=People/CN=' + username
-        user_request = 'user_req'
+        user_req = tempfile.NamedTemporaryFile(dir=globus_dir)
+        tmp_key = tempfile.NamedTemporaryFile(dir=globus_dir).name
 
         try:
-            os.makedirs(globus_dir, 0755)
-        except OSError, e:
-            if e.errno == errno.EEXIST:
+            os.makedirs(globus_dir, 0o755)
+            os.chown(globus_dir, user.pw_uid, user.pw_gid)
+        except EnvironmentError as exc:
+            if exc.errno == errno.EEXIST:
                 pass
 
         # Generate user request and key
-        _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", user_keypath, "-subj",
+        _run_command(("openssl", "req", "-sha256", "-new", "-out", user_req.name, "-keyout", tmp_key, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
-        os.chmod(user_keypath, 0400)
+        os.chmod(tmp_key, 0o400)
+        os.chown(tmp_key, user.pw_uid, user.pw_gid)
+        _safe_move(tmp_key, user_keypath)
 
-        try:
-            # Generate user cert
-            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
-                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
-                          '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out',
-                          user_path, '-batch'), "generate user cert")
+        # Generate user cert
+        _, cert_contents, _ = _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert',
+                                            self.path, '-keyfile', self.keypath, '-days', str(days), '-policy',
+                                            'policy_anything', '-preserveDN', '-extfile', self._EXT_CONFIG_PATH,
+                                            '-in', user_req.name, '-notext', '-batch'), "generate user cert")
+        _write_file(user_path, cert_contents, uid=user.pw_uid, gid=user.pw_gid)
 
-            user = pwd.getpwnam(username)
-            for path in (user_path, user_keypath, globus_dir):
-                os.chown(path, user.pw_uid, user.pw_gid)
-        finally:
-            os.remove(user_request)
+        user_req.close()
         return user_subject, user_path, user_keypath
 
     def crl(self, days=None):
@@ -161,11 +160,10 @@ class CA(object):
         """
         if days is None:
             days = self.days
-
         crl_path = os.path.splitext(self.path)[0] + '.r0'
-        command = ("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path, "-keyfile",
-                   self.keypath, "-crldays", str(days), "-out", crl_path)
-        _run_command(command, "generate CRL")
+        _, crl_contents, _ = _run_command(("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path,
+                                           "-keyfile", self.keypath, "-crldays", str(days)), "generate CRL")
+        _write_file(crl_path, crl_contents)
         return crl_path
 
     #TODO: Implement cleanup function
@@ -212,9 +210,9 @@ basicConstraints=critical,CA:false
 
         # openssl 0.x doesn't create this for us
         try:
-            os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0755)
-        except OSError, e:
-            if e.errno == errno.EEXIST:
+            os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0o755)
+        except EnvironmentError as exc:
+            if exc.errno == errno.EEXIST:
                 pass
 
     def _ca_support_files(self):
@@ -269,8 +267,8 @@ cond_subjects		globus	'"%s/*"'
                 try:
                     os.symlink(ca_name + source_ext,
                                os.path.join(self._CERTS_DIR, subject_hash + link_ext))
-                except OSError, e: 
-                    if e.errno == errno.EEXIST:
+                except EnvironmentError as exc:
+                    if exc.errno == errno.EEXIST:
                         continue # safe to skip if symlink already exists
 
 def certificate_info(path):
@@ -282,7 +280,7 @@ def certificate_info(path):
     subject_issuer_re = r'subject\s*=\s*([^\n]+)\nissuer\s*=\s*([^\n]+)\n'
     matches = re.match(subject_issuer_re, stdout).groups()
     if matches is None:
-        raise OSError(status, stdout)
+        raise RuntimeError(status, stdout)
     subject, issuer = matches
     return (subject, issuer)
 
@@ -309,8 +307,43 @@ def _get_hostname():
     except socket.error:
         return None
 
-def _write_file(path, contents):
-    """Utility function for writing to a file"""
-    f = open(path, 'w')
-    f.write(contents)
-    f.close()
+def _write_file(path, contents, mode=0o644, uid=0, gid=0):
+    """Atomically write contents to path with mode (default: 0644) owned by uid
+    (default: 0) and gid (default: 0)"""
+    tmp_file = tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False)
+    os.chmod(tmp_file.name, mode)
+    os.chown(tmp_file.name, uid, gid)
+    tmp_file.write(contents)
+    tmp_file.flush()
+    _safe_move(tmp_file, path)
+
+def _safe_move(new_file, target_path):
+    """
+    Move 'new_file' (file, NamedTemporaryFile, or path) to 'target_path'. If the
+    contents of 'new_file' are the same as the 'target_path', do nothing.  If
+    'target_path' already exists, back it up to 'target_path.old'.
+   """
+    if isinstance(new_file, str):
+        new_path = new_file
+        with open(new_path, 'r') as new_file:
+            contents = new_file.read()
+    elif isinstance(new_file, file) or hasattr(new_file, 'file'): # NamedTemporaryFiles have a 'file' attribute
+        new_path = new_file.name
+        new_file.seek(0)
+        contents = new_file.read()
+    else:
+        raise TypeError('Expected string, file, or NamedTemporaryFile instance')
+
+    try:
+        with open(target_path, 'r') as old_file:
+            old_contents = old_file.read()
+        if contents.strip() == old_contents.strip():
+            os.remove(new_path)
+            return
+        os.rename(target_path, target_path + '.old')
+    except EnvironmentError as exc:
+        if exc.errno == errno.ENOENT:
+            pass
+        else:
+            raise
+    os.rename(new_path, target_path)
