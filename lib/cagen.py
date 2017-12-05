@@ -154,7 +154,9 @@ class CA(object):
                           user_path + '.new', '-batch'), "generate user cert")
 
             for path in (user_path, user_keypath):
-                _safe_move(path + '.new', path, uid=user.pw_uid, gid=user.pw_gid)
+                new_path = path + '.new'
+                os.chown(new_path, user.pw_uid, user.pw_gid)
+                _safe_move(new_path, path)
         finally:
             os.remove(user_request)
         return user_subject, user_path, user_keypath
@@ -317,19 +319,22 @@ def _get_hostname():
     except socket.error:
         return None
 
-def _write_file(path, contents, mode=0o644):
-    """Utility function for writing to a file"""
+def _write_file(path, contents, mode=0o644, uid=0, gid=0):
+    """Atomically write contents to path with mode (default: 0644) owned by uid
+    (default: 0) and gid (default: 0)"""
     tmp_file = tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False)
+    os.chmod(tmp_file.name, mode)
+    os.chown(tmp_file.name, uid, gid)
     tmp_file.write(contents)
     tmp_file.flush()
-    _safe_move(tmp_file, path, mode)
+    _safe_move(tmp_file, path)
 
-def _safe_move(new_file, target_path, mode=0o644, uid=0, gid=0):
+def _safe_move(new_file, target_path):
     """
-    Move 'new_file' (file, NamedTemporaryFile, or path) to 'target_path', backing up 'target_path' to 'target_path.old'
-    if it already exists. Maintain the permissions and ownership of 'target_path' or default to 0644 owned by root:root
-    if 'target_path' does not exist. If the contents of 'new_file' are the same as the 'target_path', do nothing.
-    """
+    Move 'new_file' (file, NamedTemporaryFile, or path) to 'target_path'. If the
+    contents of 'new_file' are the same as the 'target_path', do nothing.  If
+    'target_path' already exists, back it up to 'target_path.old'.
+   """
     if isinstance(new_file, str):
         new_path = new_file
         with open(new_path, 'r') as new_file:
@@ -341,26 +346,16 @@ def _safe_move(new_file, target_path, mode=0o644, uid=0, gid=0):
     else:
         raise TypeError('Expected string, file, or NamedTemporaryFile instance')
 
-    os.chmod(new_path, mode)
-    os.chown(new_path, uid, gid)
-
     try:
         with open(target_path, 'r') as old_file:
             old_contents = old_file.read()
         if contents.strip() == old_contents.strip():
             os.remove(new_path)
             return
-
-        stat = os.stat(target_path)
-        mode = stat.st_mode
-        uid = stat.st_uid
-        gid = stat.st_gid
         os.rename(target_path, target_path + '.old')
     except (IOError, OSError) as exc:
         if exc.errno == errno.ENOENT:
             pass
         else:
             raise
-    os.chmod(new_path, mode)
-    os.chown(new_path, uid, gid)
     os.rename(new_path, target_path)
