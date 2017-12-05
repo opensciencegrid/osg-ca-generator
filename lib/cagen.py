@@ -39,6 +39,7 @@ class CA(object):
         except AttributeError:
             raise CertException('Could not find CN in subject')
         self._subject_base = re.sub(r'\/CN=.*', '', subject)
+        self.host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
 
         self.path = os.path.join(self._CERTS_DIR, basename + '.pem')
         self.keypath = os.path.splitext(self.path)[0] + '.key'
@@ -87,13 +88,12 @@ class CA(object):
 
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
-        host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
         host_req = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR)
         tmp_key = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR).name
 
         # Generate host request and key (in DER format)
         _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_req.name, '-keyform', "PEM", '-keyout', tmp_key,
-                      '-subj', host_subject), 'generate host cert request')
+                      '-subj', self.host_subject), 'generate host cert request')
         os.chmod(tmp_key, 0o400)
         _safe_move(tmp_key, host_keypath)
 
@@ -105,7 +105,7 @@ class CA(object):
         _write_file(host_path, cert_contents)
 
         host_req.close()
-        return host_subject, host_path, host_keypath
+        return self.host_subject, host_path, host_keypath
 
     def usercert(self, username, password, days=None):
         """
@@ -165,6 +165,41 @@ class CA(object):
                                            "-keyfile", self.keypath, "-crldays", str(days)), "generate CRL")
         _write_file(crl_path, crl_contents)
         return crl_path
+
+    def voms(self, vo_name):
+        """
+        Create VOMS LSC files and entry in /etc/vomses
+
+        vo_name - name of Virtual Organization (alpha-numeric characters only)
+        """
+
+        if not re.match(r'^\w+$', vo_name): # voms tools insist on alpha-numeric only VO names
+            raise RuntimeError('VO name must only consist of alpha-numeric characters.')
+
+        vomsdir = os.path.join(self._GRID_SEC_DIR, 'vomsdir', vo_name)
+        try:
+            os.makedirs(vomsdir)
+        except EnvironmentError as exc:
+            if exc.errno == errno.EEXIST:
+                pass
+
+        uri = vo_name + '.opensciencegrid.org'
+        lsc = os.path.join(vomsdir, uri + '.lsc')
+        _write_file(lsc, '%s\n%s\n' % (self.host_subject, self.subject))
+
+        vomses = '/etc/vomses'
+        contents = '"%s" "%s" "15001 "%s" "%s"\n' % (vo_name, uri, self.host_subject, vo_name)
+        try:
+            with open(vomses, 'r') as vomses_file:
+                vos = vomses_file.read().rstrip()
+                if contents.strip() in vos:
+                    return
+        except EnvironmentError as exc:
+            if exc.errno == errno.ENOENT:
+                pass
+            else:
+                raise RuntimeError('Could not read %s' % vomses)
+        _write_file(vomses, contents)
 
     #TODO: Implement cleanup function
 

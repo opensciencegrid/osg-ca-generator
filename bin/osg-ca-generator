@@ -24,6 +24,8 @@ def main():
                  help='Create a user certificate for the specified user using the test CA')
     p.add_option('-p', '--pass', default='', dest='password',
                  help='Set the user certificate\'s password')
+    p.add_option('-v', '--voms', default='', dest='voms',
+                 help='Virtual Organization name (alpha-numeric characters only)')
     opts, _ = p.parse_args()
 
     if opts.password and not opts.username:
@@ -39,6 +41,9 @@ def main():
         subject_prefix = '/DC=org/DC=Open Science Grid/'
         mimic = 'digicert'
     test_ca = CA(subject_prefix + 'O=OSG Software/CN=OSG Test CA', opts.days, opts.force, mimic)
+
+    if opts.voms:
+        test_ca.voms(opts.voms)
 
     if test_ca.created:
         ca_msg_verb = 'Created'
@@ -69,4 +74,7 @@ def main():
             print 'Skipped writing user cert due to existing cert at %s' % user_path
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except RuntimeError, exc:
+        sys.exit('ERROR: ' + str(exc))
