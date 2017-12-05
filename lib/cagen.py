@@ -48,9 +48,9 @@ class CA(object):
         # Place necessary config and folders for CA generation
         self._write_openssl_config()
         try:
-            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0755)
-        except OSError, e:
-            if e.errno == errno.EEXIST:
+            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
                 pass
 
         # Generate the CA
@@ -100,7 +100,7 @@ class CA(object):
             # Run the private key through RSA to get proper format (-keyform doesn't work in openssl > 0.9.8)
             _run_command(('openssl', 'rsa', '-in', host_pk_der, '-outform', 'PEM', '-out', host_keypath),
                          'generate host private key')
-            os.chmod(host_keypath, 0400)
+            os.chmod(host_keypath, 0o400)
 
             # Generate host cert
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
@@ -135,16 +135,16 @@ class CA(object):
         user_request = 'user_req'
 
         try:
-            os.makedirs(globus_dir, 0755)
+            os.makedirs(globus_dir, 0o755)
             os.chown(globus_dir, user.pw_uid, user.pw_gid)
-        except OSError, e:
-            if e.errno == errno.EEXIST:
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
                 pass
 
         # Generate user request and key
         _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", new_keypath, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
-        os.chmod(new_keypath, 0400)
+        os.chmod(new_keypath, 0o400)
 
         try:
             # Generate user cert
@@ -220,9 +220,9 @@ basicConstraints=critical,CA:false
 
         # openssl 0.x doesn't create this for us
         try:
-            os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0755)
-        except OSError, e:
-            if e.errno == errno.EEXIST:
+            os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0o755)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
                 pass
 
     def _ca_support_files(self):
@@ -317,14 +317,14 @@ def _get_hostname():
     except socket.error:
         return None
 
-def _write_file(path, contents, mode=0644):
+def _write_file(path, contents, mode=0o644):
     """Utility function for writing to a file"""
     tmp_file = tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False)
     tmp_file.write(contents)
     tmp_file.flush()
     _safe_move(tmp_file, path, mode)
 
-def _safe_move(new_file, target_path, mode=0644, uid=0, gid=0):
+def _safe_move(new_file, target_path, mode=0o644, uid=0, gid=0):
     """
     Move 'new_file' (file, NamedTemporaryFile, or path) to 'target_path', backing up 'target_path' to 'target_path.old'
     if it already exists. Maintain the permissions and ownership of 'target_path' or default to 0644 owned by root:root
@@ -356,7 +356,7 @@ def _safe_move(new_file, target_path, mode=0644, uid=0, gid=0):
         uid = stat.st_uid
         gid = stat.st_gid
         os.rename(target_path, target_path + '.old')
-    except IOError, exc:
+    except (IOError, OSError) as exc:
         if exc.errno == errno.ENOENT:
             pass
         else:
