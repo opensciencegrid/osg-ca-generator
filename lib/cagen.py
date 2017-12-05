@@ -5,6 +5,7 @@ import os
 import pwd
 import re
 import socket
+import tempfile
 from subprocess import Popen, PIPE
 
 class CA(object):
@@ -53,10 +54,13 @@ class CA(object):
                 pass
 
         # Generate the CA
-        _run_command(('openssl', 'genrsa', '-out', self.keypath, '2048'), 'generate CA private key')
-        _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-out', self.path, '-key',
-                      self.keypath, '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
-                     'generate CA')
+        new_keypath = self.keypath + '.new'
+        _run_command(('openssl', 'genrsa', '-out', new_keypath, '2048'), 'generate CA private key')
+        _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-out', self.path + '.new', '-key', new_keypath,
+                      '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)), 'generate CA')
+
+        for path in [self.path, self.keypath]:
+            _safe_move(path + '.new', path)
 
         # Add supporting CA files
         self._ca_support_files()
@@ -125,30 +129,32 @@ class CA(object):
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
+        new_keypath = user_keypath + '.new'
+        user = pwd.getpwnam(username)
         user_subject = self._subject_base + '/OU=People/CN=' + username
         user_request = 'user_req'
 
         try:
             os.makedirs(globus_dir, 0755)
+            os.chown(globus_dir, user.pw_uid, user.pw_gid)
         except OSError, e:
             if e.errno == errno.EEXIST:
                 pass
 
         # Generate user request and key
-        _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", user_keypath, "-subj",
+        _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", new_keypath, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
-        os.chmod(user_keypath, 0400)
+        os.chmod(new_keypath, 0400)
 
         try:
             # Generate user cert
             _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
                           '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
                           '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out',
-                          user_path, '-batch'), "generate user cert")
+                          user_path + '.new', '-batch'), "generate user cert")
 
-            user = pwd.getpwnam(username)
-            for path in (user_path, user_keypath, globus_dir):
-                os.chown(path, user.pw_uid, user.pw_gid)
+            for path in (user_path, user_keypath):
+                _safe_move(path + '.new', path, uid=user.pw_uid, gid=user.pw_gid)
         finally:
             os.remove(user_request)
         return user_subject, user_path, user_keypath
@@ -164,8 +170,10 @@ class CA(object):
 
         crl_path = os.path.splitext(self.path)[0] + '.r0'
         command = ("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path, "-keyfile",
-                   self.keypath, "-crldays", str(days), "-out", crl_path)
+                   self.keypath, "-crldays", str(days), "-out", crl_path + '.new')
+
         _run_command(command, "generate CRL")
+        _safe_move(crl_path + '.new', crl_path)
         return crl_path
 
     #TODO: Implement cleanup function
@@ -309,8 +317,50 @@ def _get_hostname():
     except socket.error:
         return None
 
-def _write_file(path, contents):
+def _write_file(path, contents, mode=0644):
     """Utility function for writing to a file"""
-    f = open(path, 'w')
-    f.write(contents)
-    f.close()
+    tmp_file = tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False)
+    tmp_file.write(contents)
+    tmp_file.flush()
+    _safe_move(tmp_file, path, mode)
+
+def _safe_move(new_file, target_path, mode=0644, uid=0, gid=0):
+    """
+    Move 'new_file' (file, NamedTemporaryFile, or path) to 'target_path', backing up 'target_path' to 'target_path.old'
+    if it already exists. Maintain the permissions and ownership of 'target_path' or default to 0644 owned by root:root
+    if 'target_path' does not exist. If the contents of 'new_file' are the same as the 'target_path', do nothing.
+    """
+    if isinstance(new_file, str):
+        new_path = new_file
+        with open(new_path, 'r') as new_file:
+            contents = new_file.read()
+    elif isinstance(new_file, file) or hasattr(new_file, 'file'): # NamedTemporaryFiles have a 'file' attribute
+        new_path = new_file.name
+        new_file.seek(0)
+        contents = new_file.read()
+    else:
+        raise TypeError('Expected string, file, or NamedTemporaryFile instance')
+
+    os.chmod(new_path, mode)
+    os.chown(new_path, uid, gid)
+
+    try:
+        with open(target_path, 'r') as old_file:
+            old_contents = old_file.read()
+        if contents.strip() == old_contents.strip():
+            os.remove(new_path)
+            return
+
+        stat = os.stat(target_path)
+        mode = stat.st_mode
+        uid = stat.st_uid
+        gid = stat.st_gid
+        os.rename(target_path, target_path + '.old')
+    except IOError, exc:
+        if exc.errno == errno.ENOENT:
+            pass
+        else:
+            raise
+    os.chmod(new_path, mode)
+    os.chown(new_path, uid, gid)
+    os.rename(new_path, target_path)
