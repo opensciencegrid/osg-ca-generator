@@ -54,13 +54,12 @@ class CA(object):
                 pass
 
         # Generate the CA
-        new_keypath = self.keypath + '.new'
-        _run_command(('openssl', 'genrsa', '-out', new_keypath, '2048'), 'generate CA private key')
-        _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-out', self.path + '.new', '-key', new_keypath,
-                      '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)), 'generate CA')
-
-        for path in [self.path, self.keypath]:
-            _safe_move(path + '.new', path)
+        _, key_contents, _ = _run_command(('openssl', 'genrsa', '2048'), 'generate CA private key')
+        _write_file(self.keypath, key_contents, 0o400)
+        _, ca_contents, _ = _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-key', self.keypath,
+                                          '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
+                                         'generate CA')
+        _write_file(self.path, ca_contents)
 
         # Add supporting CA files
         self._ca_support_files()
@@ -88,29 +87,24 @@ class CA(object):
 
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
-        host_pk_der = "hostkey.der"
-
         host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
-        host_request = "host_req"
+        host_req = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR)
+        tmp_key = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR).name
 
         # Generate host request and key (in DER format)
-        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_request, '-keyout', host_pk_der, '-subj',
-                      host_subject), 'generate host cert request')
-        try:
-            # Run the private key through RSA to get proper format (-keyform doesn't work in openssl > 0.9.8)
-            _run_command(('openssl', 'rsa', '-in', host_pk_der, '-outform', 'PEM', '-out', host_keypath),
-                         'generate host private key')
-            os.chmod(host_keypath, 0o400)
+        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_req.name, '-keyform', "PEM", '-keyout', tmp_key,
+                      '-subj', host_subject), 'generate host cert request')
+        os.chmod(tmp_key, 0o400)
+        _safe_move(tmp_key, host_keypath)
 
-            # Generate host cert
-            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
-                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
-                          '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', host_request, '-notext', '-out',
-                          host_path, '-batch'),
-                         'generate host cert')
-        finally:
-            os.remove(host_pk_der)
-            os.remove(host_request)
+        # Generate host cert
+        _, cert_contents, _ = _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert',
+                                            self.path, '-keyfile', self.keypath, '-days', str(days), '-policy',
+                                            'policy_anything', '-preserveDN', '-extfile', self._EXT_CONFIG_PATH,
+                                            '-in', host_req.name, '-notext', '-batch'), 'generate host cert')
+        _write_file(host_path, cert_contents)
+
+        host_req.close()
         return host_subject, host_path, host_keypath
 
     def usercert(self, username, password, days=None):
@@ -129,10 +123,10 @@ class CA(object):
         globus_dir = os.path.join(os.path.expanduser('~' + username), '.globus')
         user_path = os.path.join(globus_dir, 'usercert.pem')
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
-        new_keypath = user_keypath + '.new'
         user = pwd.getpwnam(username)
         user_subject = self._subject_base + '/OU=People/CN=' + username
-        user_request = 'user_req'
+        user_req = tempfile.NamedTemporaryFile(dir=globus_dir)
+        tmp_key = tempfile.NamedTemporaryFile(dir=globus_dir).name
 
         try:
             os.makedirs(globus_dir, 0o755)
@@ -142,23 +136,20 @@ class CA(object):
                 pass
 
         # Generate user request and key
-        _run_command(("openssl", "req", "-sha256", "-new", "-out", user_request, "-keyout", new_keypath, "-subj",
+        _run_command(("openssl", "req", "-sha256", "-new", "-out", user_req.name, "-keyout", tmp_key, "-subj",
                       user_subject, '-passout', 'pass:' + password), 'generate user cert request and key')
-        os.chmod(new_keypath, 0o400)
+        os.chmod(tmp_key, 0o400)
+        os.chown(tmp_key, user.pw_uid, user.pw_gid)
+        _safe_move(tmp_key, user_keypath)
 
-        try:
-            # Generate user cert
-            _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert', self.path,
-                          '-keyfile', self.keypath, '-days', str(days), '-policy', 'policy_anything',
-                          '-preserveDN', '-extfile', self._EXT_CONFIG_PATH, '-in', user_request, '-notext', '-out',
-                          user_path + '.new', '-batch'), "generate user cert")
+        # Generate user cert
+        _, cert_contents, _ = _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert',
+                                            self.path, '-keyfile', self.keypath, '-days', str(days), '-policy',
+                                            'policy_anything', '-preserveDN', '-extfile', self._EXT_CONFIG_PATH,
+                                            '-in', user_req.name, '-notext', '-batch'), "generate user cert")
+        _write_file(user_path, cert_contents, uid=user.pw_uid, gid=user.pw_gid)
 
-            for path in (user_path, user_keypath):
-                new_path = path + '.new'
-                os.chown(new_path, user.pw_uid, user.pw_gid)
-                _safe_move(new_path, path)
-        finally:
-            os.remove(user_request)
+        user_req.close()
         return user_subject, user_path, user_keypath
 
     def crl(self, days=None):
@@ -169,13 +160,10 @@ class CA(object):
         """
         if days is None:
             days = self.days
-
         crl_path = os.path.splitext(self.path)[0] + '.r0'
-        command = ("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path, "-keyfile",
-                   self.keypath, "-crldays", str(days), "-out", crl_path + '.new')
-
-        _run_command(command, "generate CRL")
-        _safe_move(crl_path + '.new', crl_path)
+        _, crl_contents, _ = _run_command(("openssl", "ca", "-gencrl", "-config", self._CONFIG_PATH, "-cert", self.path,
+                                           "-keyfile", self.keypath, "-crldays", str(days)), "generate CRL")
+        _write_file(crl_path, crl_contents)
         return crl_path
 
     #TODO: Implement cleanup function
