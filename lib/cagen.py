@@ -17,9 +17,11 @@ class CA(object):
     (without the force option) or by its path with load().
     """
     _GRID_SEC_DIR = '/etc/grid-security/'
-    _CERTS_DIR = os.path.join(_GRID_SEC_DIR, 'certificates')
-    _CONFIG_PATH = '/etc/pki/tls/osg-test-ca.conf'
-    _EXT_CONFIG_PATH = '/etc/pki/tls/osg-test-extensions.conf'
+    _CERTS_DIR = os.path.join(_GRID_SEC_DIR, 'certificates/')
+    _OPENSSL_DIR = '/etc/pki/'
+    _OPENSSL_CA_DIR = os.path.join(_OPENSSL_DIR, 'CA/')
+    _CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-ca.conf')
+    _EXT_CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-extensions.conf')
     _SERIAL_NUM = 'A1B2C3D4E5F6'
 
     def __init__(self, subject, days=10, force=False):
@@ -40,7 +42,7 @@ class CA(object):
         self.host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
 
         self.path = os.path.join(self._CERTS_DIR, basename + '.pem')
-        self.keypath = os.path.splitext(self.path)[0] + '.key'
+        self.keypath = os.path.join(self._OPENSSL_DIR, 'CA', 'private', basename + '.key')
         if os.path.exists(self.path) and not force:
             return
 
@@ -209,7 +211,6 @@ class CA(object):
         key_id = ''
         pathlen = ''
 
-        openssl_dir = '/etc/pki/CA/' # TODO: This may need to be unique for each CA
         ext_contents = """%ssubjectAltName=DNS:%s
 keyUsage=critical,digitalSignature,keyEncipherment,dataEncipherment
 extendedKeyUsage=serverAuth,clientAuth
@@ -225,20 +226,20 @@ basicConstraints=critical,CA:false
                         ("# keyUsage = cRLSign, keyCertSign",
                          "keyUsage = %s" % ext_key_usage),
                         ("dir		= ../../CA		# Where everything is kept",
-                         "dir		= %s		# Where everything is kept" % openssl_dir)]
+                         "dir		= %s		# Where everything is kept" % self._OPENSSL_CA_DIR)]
         for (old, new) in replace_text:
             config_contents = config_contents.replace(old, new)
 
         _write_file(self._CONFIG_PATH, config_contents)
         _write_file(self._EXT_CONFIG_PATH, ext_contents)
-        _write_file(openssl_dir + "index.txt", "")
-        _write_file(openssl_dir + "index.txt.attr", "unique_subject = no\n") # TODO: Implement cert revocation instead
-        _write_file(openssl_dir + "serial", self._SERIAL_NUM)
-        _write_file(openssl_dir + "crlnumber", "01\n")
+        _write_file(self._OPENSSL_CA_DIR + "index.txt", "")
+        _write_file(self._OPENSSL_CA_DIR + "index.txt.attr", "unique_subject = no\n") # TODO: Implement cert revocation instead
+        _write_file(self._OPENSSL_CA_DIR + "serial", self._SERIAL_NUM)
+        _write_file(self._OPENSSL_CA_DIR + "crlnumber", "01\n")
 
         # openssl 0.x doesn't create this for us
         try:
-            os.makedirs(os.path.join(openssl_dir, 'newcerts'), 0o755)
+            os.makedirs(os.path.join(self._OPENSSL_CA_DIR, 'newcerts'), 0o755)
         except EnvironmentError as exc:
             if exc.errno == errno.EEXIST:
                 pass
