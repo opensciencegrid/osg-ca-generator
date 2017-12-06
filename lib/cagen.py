@@ -1,4 +1,4 @@
-"""Create DigiCert-like OSG test CAs and certificates"""
+"""Create CILogon-like OSG test CAs and certificates"""
 
 import errno
 import os
@@ -10,7 +10,7 @@ from subprocess import Popen, PIPE
 
 class CA(object):
     """
-    DigiCert-like certificate authorities (CAs) that can be used to generate
+    CILogon-like certificate authorities (CAs) that can be used to generate
     host or user certificates.
 
     Pre-existing CAs can be loaded via the subject name and __init__()
@@ -22,16 +22,14 @@ class CA(object):
     _EXT_CONFIG_PATH = '/etc/pki/tls/osg-test-extensions.conf'
     _SERIAL_NUM = 'A1B2C3D4E5F6'
 
-    def __init__(self, subject, days=10, force=False, mimic='digicert'):
+    def __init__(self, subject, days=10, force=False):
         """
         Create a CA (and crl) with the given subject.
 
         days - specifies the number of days before the certificate expires
         force - will overwrite any existing certs and keys if set to True
-        mimic - type of CA/certs to mimic: 'cilogon' or 'digicert' (default)
         """
         self.subject = subject
-        self.mimic = mimic
         self.days = days
         self.created = False
         try:
@@ -205,17 +203,11 @@ class CA(object):
     #TODO: Implement cleanup function
 
     def _write_openssl_config(self):
-        """Place the necessary openssl config required to mimic DigiCert"""
-        if self.mimic == 'cilogon':
-            ext_key_usage = 'critical, cRLSign, keyCertSign'
-            cert_policies = '1.3.6.1.4.1.34998.1.6'
-            key_id = ''
-            pathlen = ''
-        else:
-            ext_key_usage = 'critical, digitalSignature, cRLSign, keyCertSign'
-            cert_policies = '1.2.840.113612.5.2.2.1, 2.16.840.1.114412.31.1.1.1, 1.2.840.113612.5.2.3.3.2'
-            key_id = "authorityKeyIdentifier=keyid,issuer\nsubjectKeyIdentifier=hash\n"
-            pathlen = ', pathlen:0'
+        """Place the necessary openssl config required to mimic CILogon's cert infrastructure"""
+        ext_key_usage = 'critical, cRLSign, keyCertSign'
+        cert_policies = '1.3.6.1.4.1.34998.1.6'
+        key_id = ''
+        pathlen = ''
 
         openssl_dir = '/etc/pki/CA/' # TODO: This may need to be unique for each CA
         ext_contents = """%ssubjectAltName=DNS:%s
