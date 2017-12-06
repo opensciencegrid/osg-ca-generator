@@ -125,8 +125,6 @@ class CA(object):
         user_keypath = os.path.join(globus_dir, 'userkey.pem')
         user = pwd.getpwnam(username)
         user_subject = self._subject_base + '/OU=People/CN=' + username
-        user_req = tempfile.NamedTemporaryFile(dir=globus_dir)
-        tmp_key = tempfile.NamedTemporaryFile(dir=globus_dir).name
 
         try:
             os.makedirs(globus_dir, 0o755)
@@ -134,6 +132,9 @@ class CA(object):
         except EnvironmentError as exc:
             if exc.errno == errno.EEXIST:
                 pass
+
+        user_req = tempfile.NamedTemporaryFile(dir=globus_dir)
+        tmp_key = tempfile.NamedTemporaryFile(dir=globus_dir).name
 
         # Generate user request and key
         _run_command(("openssl", "req", "-sha256", "-new", "-out", user_req.name, "-keyout", tmp_key, "-subj",
