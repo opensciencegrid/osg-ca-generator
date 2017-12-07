@@ -55,8 +55,7 @@ class CA(object):
                 pass
 
         # Generate the CA
-        _, key_contents, _ = _run_command(('openssl', 'genrsa', '2048'), 'generate CA private key')
-        _write_file(self.keypath, key_contents, 0o400)
+        _write_rsa_key(self.keypath)
         _, ca_contents, _ = _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-key', self.keypath,
                                           '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
                                          'generate CA')
@@ -91,8 +90,7 @@ class CA(object):
         host_req = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR)
 
         # Generate host request and key
-        _, key_contents, _ = _run_command(('openssl', 'genrsa', '2048'), 'generate CA private key')
-        _write_file(host_keypath, key_contents, 0o400)
+        _write_rsa_key(host_keypath)
         _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_req.name, '-key', host_keypath, '-subj',
                       self.host_subject), 'generate host cert request')
 
@@ -375,3 +373,9 @@ def _safe_move(new_file, target_path):
         else:
             raise
     os.rename(new_path, target_path)
+
+def _write_rsa_key(path):
+    """Call to genrsa to create an RSA-key with proper (0400) permissions
+    """
+    _, key_contents, _ = _run_command(('openssl', 'genrsa', '2048'), 'generate private key: %s' % path)
+    _write_file(path, key_contents, 0o400)
