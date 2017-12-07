@@ -89,13 +89,12 @@ class CA(object):
         host_path = os.path.join(self._GRID_SEC_DIR, 'hostcert.pem')
         host_keypath = os.path.join(self._GRID_SEC_DIR, 'hostkey.pem')
         host_req = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR)
-        tmp_key = tempfile.NamedTemporaryFile(dir=self._GRID_SEC_DIR).name
 
-        # Generate host request and key (in DER format)
-        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_req.name, '-keyform', "PEM", '-keyout', tmp_key,
-                      '-subj', self.host_subject), 'generate host cert request')
-        os.chmod(tmp_key, 0o400)
-        _safe_move(tmp_key, host_keypath)
+        # Generate host request and key
+        _, key_contents, _ = _run_command(('openssl', 'genrsa', '2048'), 'generate CA private key')
+        _write_file(host_keypath, key_contents, 0o400)
+        _run_command(('openssl', 'req', '-new', '-nodes', '-out', host_req.name, '-key', host_keypath, '-subj',
+                      self.host_subject), 'generate host cert request')
 
         # Generate host cert
         _, cert_contents, _ = _run_command(('openssl', 'ca', '-md', 'sha256', '-config', self._CONFIG_PATH, '-cert',
