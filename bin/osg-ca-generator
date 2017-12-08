@@ -12,7 +12,7 @@ def main():
                      description='Generate or load pre-existing DigiCert-like ' + \
                      'CAs for testing OSG software.')
 
-    p.add_option('-e', '--expire-days', default=10, type='int', dest='days',
+    p.add_option('-e', '--expire-days', default=10, type='int', dest='days', metavar='DAYS',
                  help='The number of days before test CAs or certificates expire')
     p.add_option('-f', '--force', action='store_true', default=False, dest='force',
                  help='Overwrite any existing CAs or certificates')
@@ -22,8 +22,8 @@ def main():
                  help='Create a user certificate for the specified user using the test CA')
     p.add_option('-p', '--pass', default='', dest='password',
                  help='Set the user certificate\'s password')
-    p.add_option('-v', '--voms', default='', dest='voms',
-                 help='Virtual Organization name (alpha-numeric characters only)')
+    p.add_option('-v', '--voms', default='', dest='voms', metavar='VO',
+                 help='Create files for Virtual Organization, VO')
     opts, _ = p.parse_args()
 
     if opts.password and not opts.username:
