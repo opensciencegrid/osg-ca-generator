@@ -43,10 +43,10 @@ Create an OSG host cert, creating a new CA if necessary, otherwise using a pre-e
 osg-ca-generator --host
 ```
 
-Create VOMS support files:
+Create VOMS support files for the `VOTEST` virtual organization:
 
 ```
-osg-ca-generator --voms
+osg-ca-generator --voms VOTEST
 ```
 
 Create an OSG user cert for the user `foo` with the password `password`, creating a new CA if necessary, otherwise using a pre-existing one:
