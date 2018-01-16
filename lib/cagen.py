@@ -186,18 +186,19 @@ class CA(object):
         _write_file(lsc, '%s\n%s\n' % (self.host_subject, self.subject))
 
         vomses = '/etc/vomses'
-        contents = '"%s" "%s" "15001 "%s" "%s"\n' % (vo_name, uri, self.host_subject, vo_name)
+        new_vo = '"%s" "%s" "15001" "%s" "%s"\n' % (vo_name, uri, self.host_subject, vo_name)
         try:
             with open(vomses, 'r') as vomses_file:
                 vos = vomses_file.read().rstrip()
-                if contents.strip() in vos:
+                if new_vo.rstrip() in vos:
                     return
+                vos += '\n' + new_vo
         except EnvironmentError as exc:
             if exc.errno == errno.ENOENT:
-                pass
+                vos = new_vo
             else:
                 raise RuntimeError('Could not read %s' % vomses)
-        _write_file(vomses, contents)
+        _write_file(vomses, vos)
 
     #TODO: Implement cleanup function
 
