@@ -186,7 +186,7 @@ class CA(object):
         _write_file(lsc, '%s\n%s\n' % (self.host_subject, self.subject))
 
         vomses = '/etc/vomses'
-        new_vo = '"%s" "%s" "15001 "%s" "%s"\n' % (vo_name, uri, self.host_subject, vo_name)
+        new_vo = '"%s" "%s" "15001" "%s" "%s"\n' % (vo_name, uri, self.host_subject, vo_name)
         try:
             with open(vomses, 'r') as vomses_file:
                 vos = vomses_file.read()
