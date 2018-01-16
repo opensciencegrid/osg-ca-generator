@@ -195,7 +195,7 @@ class CA(object):
                 vos += new_vo
         except EnvironmentError as exc:
             if exc.errno == errno.ENOENT:
-                pass
+                vos = new_vo
             else:
                 raise RuntimeError('Could not read %s' % vomses)
         _write_file(vomses, vos)
