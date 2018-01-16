@@ -189,10 +189,10 @@ class CA(object):
         new_vo = '"%s" "%s" "15001" "%s" "%s"\n' % (vo_name, uri, self.host_subject, vo_name)
         try:
             with open(vomses, 'r') as vomses_file:
-                vos = vomses_file.read()
-                if new_vo in vos:
+                vos = vomses_file.read().rstrip()
+                if new_vo.rstrip() in vos:
                     return
-                vos += new_vo
+                vos += '\n' + new_vo
         except EnvironmentError as exc:
             if exc.errno == errno.ENOENT:
                 vos = new_vo
