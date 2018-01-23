@@ -307,7 +307,7 @@ def certificate_info(path):
     subject_issuer_re = r'subject\s*=\s*([^\n]+)\nissuer\s*=\s*([^\n]+)\n'
     matches = re.match(subject_issuer_re, stdout).groups()
     if matches is None:
-        raise RuntimeError(status, stdout)
+        raise CertException(stdout)
     subject, issuer = matches
     return (subject, issuer)
 
@@ -332,7 +332,7 @@ def _get_hostname():
     try:
         return socket.gethostbyaddr(socket.gethostname())[0]
     except socket.error:
-        return None
+        raise RuntimeError("Failed to retrieve this host's FQDN")
 
 def _write_file(path, contents, mode=0o644, uid=0, gid=0):
     """Atomically write contents to path with mode (default: 0644) owned by uid
