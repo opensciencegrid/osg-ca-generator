@@ -3,8 +3,8 @@
 import pwd
 import os
 import sys
-from cagen import CA
 from optparse import OptionParser
+from cagen import CA, CertException
 
 def main():
     p = OptionParser('%prog [options]',
@@ -68,5 +68,5 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except RuntimeError, exc:
+    except (RuntimeError, CertException) as exc:
         sys.exit('ERROR: ' + str(exc))

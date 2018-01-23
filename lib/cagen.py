@@ -181,7 +181,7 @@ class CA(object):
             if exc.errno == errno.EEXIST:
                 pass
 
-        uri = vo_name + '.opensciencegrid.org'
+        uri = _get_hostname()
         lsc = os.path.join(vomsdir, uri + '.lsc')
         _write_file(lsc, '%s\n%s\n' % (self.host_subject, self.subject))
 
@@ -302,12 +302,12 @@ def certificate_info(path):
     """Extracts and returns the subject and issuer from an X.509 certificate."""
     command = ('openssl', 'x509', '-noout', '-subject', '-issuer', '-in', path)
     status, stdout, stderr = _run_command(command, 'Fetching certificate info')
-    if (status != 0) or len(stdout.strip()) == 0 or len(stderr.strip()) != 0:
+    if (status != 0) or not stdout.strip() or stderr.strip():
         raise CertException('Could not extract subject or issuer from %s' % path)
     subject_issuer_re = r'subject\s*=\s*([^\n]+)\nissuer\s*=\s*([^\n]+)\n'
     matches = re.match(subject_issuer_re, stdout).groups()
     if matches is None:
-        raise RuntimeError(status, stdout)
+        raise CertException(stdout)
     subject, issuer = matches
     return (subject, issuer)
 
@@ -332,7 +332,7 @@ def _get_hostname():
     try:
         return socket.gethostbyaddr(socket.gethostname())[0]
     except socket.error:
-        return None
+        raise RuntimeError("Failed to retrieve this host's FQDN")
 
 def _write_file(path, contents, mode=0o644, uid=0, gid=0):
     """Atomically write contents to path with mode (default: 0644) owned by uid
