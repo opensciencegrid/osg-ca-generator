@@ -76,6 +76,11 @@ else ifneq ($(shell ls -1 $(UPSTREAM_DIR)/$(TARBALL_NAME) 2>/dev/null),)
 else
 	mkdir -p $(UPSTREAM_DIR)
 	install -p -m 0644 $(TARBALL_NAME) $(UPSTREAM_DIR)/$(TARBALL_NAME)
+	@echo
+	@echo ".source file line:"
+	@echo -n "$(PACKAGE)/$(VERSION)/$(TARBALL_NAME) sha1sum="; \
+		sha1sum $(UPSTREAM_DIR)/$(TARBALL_NAME) | awk '{print $$1}'
+	@echo
 	rm -f $(TARBALL_NAME)
 endif
 
