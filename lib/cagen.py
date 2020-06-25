@@ -371,7 +371,7 @@ def _safe_move(new_file, target_path):
         new_path = new_file
         with open(new_path, 'rb') as new_file:
             contents = to_str(new_file.read())
-    elif isinstance(new_file, file) or hasattr(new_file, 'file'): # NamedTemporaryFiles have a 'file' attribute
+    elif hasattr(new_file, "seek"):
         new_path = new_file.name
         new_file.seek(0)
         contents = to_str(new_file.read())
