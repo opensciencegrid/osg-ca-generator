@@ -1,5 +1,6 @@
-#!/bin/env python
+#!/usr/bin/env python
 
+from __future__ import print_function
 import pwd
 import os
 import sys
@@ -41,16 +42,16 @@ def main():
         ca_msg_verb = 'Created'
     else:
         ca_msg_verb = 'Loaded'
-    print '%s CA at %s...' % (ca_msg_verb, test_ca.path)
+    print('%s CA at %s...' % (ca_msg_verb, test_ca.path))
 
     if opts.host:
         # Create hostcert
         host_path = '/etc/grid-security/hostcert.pem'
         if not os.path.exists(host_path) or opts.force:
-            print 'Writing host cert to %s...' % host_path
+            print('Writing host cert to %s...' % host_path)
             test_ca.hostcert(opts.days)
         else:
-            print 'Skipped writing host cert due to existing cert at %s' % host_path
+            print('Skipped writing host cert due to existing cert at %s' % host_path)
 
     if opts.username:
         # Create user cert
@@ -60,10 +61,10 @@ def main():
             sys.exit('User %s does not exist' % opts.username)
         user_path = os.path.join(user.pw_dir, '.globus', 'usercert.pem')
         if not os.path.exists(user_path) or opts.force:
-            print 'Writing user cert to %s...' % user_path
+            print('Writing user cert to %s...' % user_path)
             test_ca.usercert(opts.username, opts.password, opts.days)
         else:
-            print 'Skipped writing user cert due to existing cert at %s' % user_path
+            print('Skipped writing user cert due to existing cert at %s' % user_path)
 
 if __name__ == '__main__':
     try:
