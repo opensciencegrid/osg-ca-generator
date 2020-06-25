@@ -24,6 +24,15 @@ def to_bytes(strlike, encoding="latin-1", errors="backslashreplace"):
     return strlike
 
 
+def _safe_makedirs(path, mode=0o777):
+    # os.makedirs() has no exist_ok in Python 2.6
+    try:
+        os.makedirs(path, mode)
+    except EnvironmentError as exc:
+        if exc.errno != errno.EEXIST:
+            raise
+
+
 class CA(object):
     """
     CILogon-like certificate authorities (CAs) that can be used to generate
@@ -36,6 +45,7 @@ class CA(object):
     _CERTS_DIR = os.path.join(_GRID_SEC_DIR, 'certificates/')
     _OPENSSL_DIR = '/etc/pki/'
     _OPENSSL_CA_DIR = os.path.join(_OPENSSL_DIR, 'CA/')
+    _OPENSSL_CA_PRIVATE_DIR = os.path.join(_OPENSSL_CA_DIR, 'private/')
     _CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-ca.conf')
     _EXT_CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-extensions.conf')
     _SERIAL_NUM = 'A1B2C3D4E5F6'
@@ -58,17 +68,16 @@ class CA(object):
         self.host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
 
         self.path = os.path.join(self._CERTS_DIR, basename + '.pem')
-        self.keypath = os.path.join(self._OPENSSL_DIR, 'CA', 'private', basename + '.key')
+        self.keypath = os.path.join(self._OPENSSL_CA_PRIVATE_DIR, basename + '.key')
         if os.path.exists(self.path) and not force:
             return
 
+        _safe_makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
+        _safe_makedirs(self._OPENSSL_CA_DIR, 0o755)
+        _safe_makedirs(self._OPENSSL_CA_PRIVATE_DIR, 0o700)
+
         # Place necessary config and folders for CA generation
         self._write_openssl_config()
-        try:
-            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
 
         # Generate the CA
         _write_rsa_key(self.keypath)
@@ -139,12 +148,8 @@ class CA(object):
         user = pwd.getpwnam(username)
         user_subject = self._subject_base + '/OU=People/CN=' + username
 
-        try:
-            os.makedirs(globus_dir, 0o755)
-            os.chown(globus_dir, user.pw_uid, user.pw_gid)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
+        _safe_makedirs(globus_dir, 0o755)
+        os.chown(globus_dir, user.pw_uid, user.pw_gid)
 
         user_req = tempfile.NamedTemporaryFile(dir=globus_dir)
         tmp_key = tempfile.NamedTemporaryFile(dir=globus_dir).name
@@ -191,11 +196,7 @@ class CA(object):
             raise RuntimeError('VO name must only consist of alpha-numeric characters.')
 
         vomsdir = os.path.join(self._GRID_SEC_DIR, 'vomsdir', vo_name)
-        try:
-            os.makedirs(vomsdir)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
+        _safe_makedirs(vomsdir)
 
         uri = _get_hostname()
         lsc = os.path.join(vomsdir, uri + '.lsc')
@@ -252,11 +253,7 @@ basicConstraints=critical,CA:false
         _write_file(self._OPENSSL_CA_DIR + "crlnumber", "01\n")
 
         # openssl 0.x doesn't create this for us
-        try:
-            os.makedirs(os.path.join(self._OPENSSL_CA_DIR, 'newcerts'), 0o755)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
+        _safe_makedirs(os.path.join(self._OPENSSL_CA_DIR, 'newcerts'), 0o755)
 
     def _ca_support_files(self):
         """Place the namespace, signing_policy, and hash symlinks required by the CA"""
