@@ -8,6 +8,22 @@ import socket
 import tempfile
 from subprocess import Popen, PIPE
 
+
+def to_str(strlike, encoding="latin-1", errors="backslashreplace"):
+    if not isinstance(strlike, str):
+        if str is bytes:
+            return strlike.encode(encoding, errors)
+        else:
+            return strlike.decode(encoding, errors)
+    return strlike
+
+
+def to_bytes(strlike, encoding="latin-1", errors="backslashreplace"):
+    if not isinstance(strlike, bytes):
+        return strlike.encode(encoding, errors)
+    return strlike
+
+
 class CA(object):
     """
     CILogon-like certificate authorities (CAs) that can be used to generate
@@ -216,8 +232,8 @@ certificatePolicies=%s
 basicConstraints=critical,CA:false
 """ % (key_id, _get_hostname(), cert_policies)
 
-        openssl_config = open('/etc/pki/tls/openssl.cnf', 'r')
-        config_contents = openssl_config.read()
+        openssl_config = open('/etc/pki/tls/openssl.cnf', 'rb')
+        config_contents = to_str(openssl_config.read())
         openssl_config.close()
         replace_text = [("# crl_extensions	= crl_ext", "crl_extensions	= crl_ext"),
                         ("basicConstraints = CA:true", "basicConstraints = critical, CA:true%s" % pathlen),
@@ -319,6 +335,7 @@ def _run_command(cmd, msg):
     """Takes a shell command (formatted as a tuple) and runs it"""
     p = Popen(cmd, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
+    stdout, stderr = to_str(stdout), to_str(stderr)
     if p.returncode != 0:
         raise CertException("%s\nCOMMAND:\n%s\nSTDOUT:\n%s\nSTDERR:\n%s\n"
                             % (msg, ' '.join(cmd), stdout, stderr))
@@ -337,10 +354,10 @@ def _get_hostname():
 def _write_file(path, contents, mode=0o644, uid=0, gid=0):
     """Atomically write contents to path with mode (default: 0644) owned by uid
     (default: 0) and gid (default: 0)"""
-    tmp_file = tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False)
+    tmp_file = tempfile.NamedTemporaryFile(mode='w+b', dir=os.path.dirname(path), delete=False)
     os.chmod(tmp_file.name, mode)
     os.chown(tmp_file.name, uid, gid)
-    tmp_file.write(contents)
+    tmp_file.write(to_bytes(contents))
     tmp_file.flush()
     _safe_move(tmp_file, path)
 
@@ -352,18 +369,18 @@ def _safe_move(new_file, target_path):
    """
     if isinstance(new_file, str):
         new_path = new_file
-        with open(new_path, 'r') as new_file:
-            contents = new_file.read()
+        with open(new_path, 'rb') as new_file:
+            contents = to_str(new_file.read())
     elif isinstance(new_file, file) or hasattr(new_file, 'file'): # NamedTemporaryFiles have a 'file' attribute
         new_path = new_file.name
         new_file.seek(0)
-        contents = new_file.read()
+        contents = to_str(new_file.read())
     else:
         raise TypeError('Expected string, file, or NamedTemporaryFile instance')
 
     try:
-        with open(target_path, 'r') as old_file:
-            old_contents = old_file.read()
+        with open(target_path, 'rb') as old_file:
+            old_contents = to_str(old_file.read())
         if contents.strip() == old_contents.strip():
             os.remove(new_path)
             return
