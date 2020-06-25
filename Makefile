@@ -6,7 +6,7 @@
 # ------------------------------------------------------------------------------
 
 PACKAGE := osg-ca-generator
-VERSION := 1.3.2
+VERSION := 1.3.3
 
 
 # ------------------------------------------------------------------------------
@@ -23,13 +23,14 @@ DIST_FILES := bin/ lib/ Makefile
 # ------------------------------------------------------------------------------
 # Internal variables: Do not change for a release
 # ------------------------------------------------------------------------------
+PYTHON = python
 
 DIST_DIR_PREFIX := dist_dir_
 TARBALL_DIR := $(PACKAGE)-$(VERSION)
 TARBALL_NAME := $(PACKAGE)-$(VERSION).tar.gz
 UPSTREAM := /p/vdt/public/html/upstream
 UPSTREAM_DIR := $(UPSTREAM)/$(PACKAGE)/$(VERSION)
-INSTALL_PYTHON_DIR := $(shell python -c 'from distutils.sysconfig import get_python_lib; print get_python_lib()')
+INSTALL_PYTHON_DIR := $(shell $(PYTHON) -c 'from distutils.sysconfig import get_python_lib; print(get_python_lib())')
 
 
 # ------------------------------------------------------------------------------
