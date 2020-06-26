@@ -313,7 +313,7 @@ cond_subjects		globus	'"%s/*"'
 
 def certificate_info(path):
     """Extracts and returns the subject and issuer from an X.509 certificate."""
-    command = ('openssl', 'x509', '-nameopt', 'compat', '-noout', '-subject', '-issuer', '-in', path)
+    command = ('openssl', 'x509', '-noout', '-subject', '-issuer', '-in', path)
     status, stdout, stderr = _run_command(command, 'Fetching certificate info')
     if (status != 0) or not stdout.strip() or stderr.strip():
         raise CertException('Could not extract subject or issuer from %s' % path)
