@@ -311,6 +311,23 @@ cond_subjects		globus	'"%s/*"'
                     if exc.errno == errno.EEXIST:
                         continue # safe to skip if symlink already exists
 
+# Transforms a DN from openssl v1.1 format to v1.0 format
+# @param path: path to the certificate
+# @param opt: specifies whether we want to get the subject or the issuer DN
+# it should be either "-subject" or "-issuer"
+# @return: the dn in the old format
+def _get_DN_in_old_format(path, opt):
+    final_dn="/"
+    attribute_re=r'\s*([^\n]+)=([^\n]+)\s*'
+    command = ('openssl', 'x509', '-noout', '-nameopt', 'sep_multiline', opt, '-in', path)
+    _, stdout, _ = _run_command(command, 'Fetching certificate info')
+    for line in stdout.split('\n'):
+        matches = re.match(attribute_re, line)
+        if matches is not None:
+            key, value= re.match(attribute_re, line).groups()
+            final_dn = final_dn + key + "=" +value + "/"
+    return final_dn[:-1]
+
 def certificate_info(path):
     """Extracts and returns the subject and issuer from an X.509 certificate."""
     command = ('openssl', 'x509', '-noout', '-subject', '-issuer', '-in', path)
@@ -322,6 +339,11 @@ def certificate_info(path):
     if matches is None:
         raise CertException(stdout)
     subject, issuer = matches
+    command = ('openssl', 'version')
+    _, openssl_version, _ = _run_command(command, "Couldn't get openssl version")
+    if re.match(r'OpenSSL\s+1.1+', openssl_version):
+        subject =  _get_DN_in_old_format(subject)
+        issuer =  _get_DN_in_old_format(issuer)
     return (subject, issuer)
 
 class CertException(Exception):
