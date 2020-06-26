@@ -330,21 +330,13 @@ def _get_DN_in_old_format(path, opt):
 
 def certificate_info(path):
     """Extracts and returns the subject and issuer from an X.509 certificate."""
-    command = ('openssl', 'x509', '-noout', '-subject', '-issuer', '-in', path)
-    status, stdout, stderr = _run_command(command, 'Fetching certificate info')
-    if (status != 0) or not stdout.strip() or stderr.strip():
-        raise CertException('Could not extract subject or issuer from %s' % path)
-    subject_issuer_re = r'subject\s*=\s*([^\n]+)\nissuer\s*=\s*([^\n]+)\n'
-    matches = re.match(subject_issuer_re, stdout).groups()
-    if matches is None:
-        raise CertException(stdout)
-    subject, issuer = matches
-    command = ('openssl', 'version')
-    _, openssl_version, _ = _run_command(command, "Couldn't get openssl version")
-    if re.match(r'OpenSSL\s+1.1+', openssl_version):
-        subject =  _get_DN_in_old_format(subject)
-        issuer =  _get_DN_in_old_format(issuer)
-    return (subject, issuer)
+    subject = _get_DN_in_old_format(path, "-subject")
+    if not subject:
+        raise CertException('Could not extract subject from %s' % path)
+    issuer = _get_DN_in_old_format(path, "-issuer")
+    if not issuer:
+        raise CertException('Could not extract issuer from %s' % path)
+    return subject, issuer
 
 class CertException(Exception):
     """Exception class for certificate errors"""
