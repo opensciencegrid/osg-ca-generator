@@ -318,10 +318,12 @@ cond_subjects		globus	'"%s/*"'
 # @return: the dn in the old format
 def _get_DN_in_old_format(path, opt):
     final_dn="/"
-    attribute_re=r'\s*([^\n]+)=([^\n]+)\s*'
+    attribute_re = r'\s*([^= \n]+)=\s*([^\n]+)\s*'
     command = ('openssl', 'x509', '-noout', '-nameopt', 'sep_multiline', opt, '-in', path)
     _, stdout, _ = _run_command(command, 'Fetching certificate info')
-    for line in stdout.split('\n'):
+
+    # skip the first line (it just says `subject= ` or `issuer= ` and may have a trailing space)
+    for line in stdout.split('\n')[1:]:
         matches = re.match(attribute_re, line)
         if matches is not None:
             key, value= re.match(attribute_re, line).groups()
