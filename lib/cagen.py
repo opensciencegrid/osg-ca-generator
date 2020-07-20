@@ -8,6 +8,31 @@ import socket
 import tempfile
 from subprocess import Popen, PIPE
 
+
+def to_str(strlike, encoding="latin-1", errors="backslashreplace"):
+    if not isinstance(strlike, str):
+        if str is bytes:
+            return strlike.encode(encoding, errors)
+        else:
+            return strlike.decode(encoding, errors)
+    return strlike
+
+
+def to_bytes(strlike, encoding="latin-1", errors="backslashreplace"):
+    if not isinstance(strlike, bytes):
+        return strlike.encode(encoding, errors)
+    return strlike
+
+
+def _safe_makedirs(path, mode=0o777):
+    # os.makedirs() has no exist_ok in Python 2.6
+    try:
+        os.makedirs(path, mode)
+    except EnvironmentError as exc:
+        if exc.errno != errno.EEXIST:
+            raise
+
+
 class CA(object):
     """
     CILogon-like certificate authorities (CAs) that can be used to generate
@@ -20,6 +45,7 @@ class CA(object):
     _CERTS_DIR = os.path.join(_GRID_SEC_DIR, 'certificates/')
     _OPENSSL_DIR = '/etc/pki/'
     _OPENSSL_CA_DIR = os.path.join(_OPENSSL_DIR, 'CA/')
+    _OPENSSL_CA_PRIVATE_DIR = os.path.join(_OPENSSL_CA_DIR, 'private/')
     _CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-ca.conf')
     _EXT_CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-extensions.conf')
     _SERIAL_NUM = 'A1B2C3D4E5F6'
@@ -42,17 +68,16 @@ class CA(object):
         self.host_subject = self._subject_base + '/OU=Services/CN=' + _get_hostname()
 
         self.path = os.path.join(self._CERTS_DIR, basename + '.pem')
-        self.keypath = os.path.join(self._OPENSSL_DIR, 'CA', 'private', basename + '.key')
+        self.keypath = os.path.join(self._OPENSSL_CA_PRIVATE_DIR, basename + '.key')
         if os.path.exists(self.path) and not force:
             return
 
+        _safe_makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
+        _safe_makedirs(self._OPENSSL_CA_DIR, 0o755)
+        _safe_makedirs(self._OPENSSL_CA_PRIVATE_DIR, 0o700)
+
         # Place necessary config and folders for CA generation
         self._write_openssl_config()
-        try:
-            os.makedirs(os.path.join(self._CERTS_DIR, 'newcerts'), 0o755)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
 
         # Generate the CA
         _write_rsa_key(self.keypath)
@@ -123,12 +148,8 @@ class CA(object):
         user = pwd.getpwnam(username)
         user_subject = self._subject_base + '/OU=People/CN=' + username
 
-        try:
-            os.makedirs(globus_dir, 0o755)
-            os.chown(globus_dir, user.pw_uid, user.pw_gid)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
+        _safe_makedirs(globus_dir, 0o755)
+        os.chown(globus_dir, user.pw_uid, user.pw_gid)
 
         user_req = tempfile.NamedTemporaryFile(dir=globus_dir)
         tmp_key = tempfile.NamedTemporaryFile(dir=globus_dir).name
@@ -175,11 +196,7 @@ class CA(object):
             raise RuntimeError('VO name must only consist of alpha-numeric characters.')
 
         vomsdir = os.path.join(self._GRID_SEC_DIR, 'vomsdir', vo_name)
-        try:
-            os.makedirs(vomsdir)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
+        _safe_makedirs(vomsdir)
 
         uri = _get_hostname()
         lsc = os.path.join(vomsdir, uri + '.lsc')
@@ -216,8 +233,8 @@ certificatePolicies=%s
 basicConstraints=critical,CA:false
 """ % (key_id, _get_hostname(), cert_policies)
 
-        openssl_config = open('/etc/pki/tls/openssl.cnf', 'r')
-        config_contents = openssl_config.read()
+        openssl_config = open('/etc/pki/tls/openssl.cnf', 'rb')
+        config_contents = to_str(openssl_config.read())
         openssl_config.close()
         replace_text = [("# crl_extensions	= crl_ext", "crl_extensions	= crl_ext"),
                         ("basicConstraints = CA:true", "basicConstraints = critical, CA:true%s" % pathlen),
@@ -236,11 +253,7 @@ basicConstraints=critical,CA:false
         _write_file(self._OPENSSL_CA_DIR + "crlnumber", "01\n")
 
         # openssl 0.x doesn't create this for us
-        try:
-            os.makedirs(os.path.join(self._OPENSSL_CA_DIR, 'newcerts'), 0o755)
-        except EnvironmentError as exc:
-            if exc.errno == errno.EEXIST:
-                pass
+        _safe_makedirs(os.path.join(self._OPENSSL_CA_DIR, 'newcerts'), 0o755)
 
     def _ca_support_files(self):
         """Place the namespace, signing_policy, and hash symlinks required by the CA"""
@@ -298,18 +311,34 @@ cond_subjects		globus	'"%s/*"'
                     if exc.errno == errno.EEXIST:
                         continue # safe to skip if symlink already exists
 
+# Transforms a DN from openssl v1.1 format to v1.0 format
+# @param path: path to the certificate
+# @param opt: specifies whether we want to get the subject or the issuer DN
+# it should be either "-subject" or "-issuer"
+# @return: the dn in the old format
+def _get_DN_in_old_format(path, opt):
+    final_dn="/"
+    attribute_re = r'\s*([^= \n]+)=\s*([^\n]+)\s*'
+    command = ('openssl', 'x509', '-noout', '-nameopt', 'sep_multiline', opt, '-in', path)
+    _, stdout, _ = _run_command(command, 'Fetching certificate info')
+
+    # skip the first line (it just says `subject= ` or `issuer= ` and may have a trailing space)
+    for line in stdout.split('\n')[1:]:
+        matches = re.match(attribute_re, line)
+        if matches is not None:
+            key, value= re.match(attribute_re, line).groups()
+            final_dn = final_dn + key + "=" +value + "/"
+    return final_dn[:-1]
+
 def certificate_info(path):
     """Extracts and returns the subject and issuer from an X.509 certificate."""
-    command = ('openssl', 'x509', '-noout', '-subject', '-issuer', '-in', path)
-    status, stdout, stderr = _run_command(command, 'Fetching certificate info')
-    if (status != 0) or not stdout.strip() or stderr.strip():
-        raise CertException('Could not extract subject or issuer from %s' % path)
-    subject_issuer_re = r'subject\s*=\s*([^\n]+)\nissuer\s*=\s*([^\n]+)\n'
-    matches = re.match(subject_issuer_re, stdout).groups()
-    if matches is None:
-        raise CertException(stdout)
-    subject, issuer = matches
-    return (subject, issuer)
+    subject = _get_DN_in_old_format(path, "-subject")
+    if not subject:
+        raise CertException('Could not extract subject from %s' % path)
+    issuer = _get_DN_in_old_format(path, "-issuer")
+    if not issuer:
+        raise CertException('Could not extract issuer from %s' % path)
+    return subject, issuer
 
 class CertException(Exception):
     """Exception class for certificate errors"""
@@ -319,6 +348,7 @@ def _run_command(cmd, msg):
     """Takes a shell command (formatted as a tuple) and runs it"""
     p = Popen(cmd, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
+    stdout, stderr = to_str(stdout), to_str(stderr)
     if p.returncode != 0:
         raise CertException("%s\nCOMMAND:\n%s\nSTDOUT:\n%s\nSTDERR:\n%s\n"
                             % (msg, ' '.join(cmd), stdout, stderr))
@@ -337,10 +367,10 @@ def _get_hostname():
 def _write_file(path, contents, mode=0o644, uid=0, gid=0):
     """Atomically write contents to path with mode (default: 0644) owned by uid
     (default: 0) and gid (default: 0)"""
-    tmp_file = tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False)
+    tmp_file = tempfile.NamedTemporaryFile(mode='w+b', dir=os.path.dirname(path), delete=False)
     os.chmod(tmp_file.name, mode)
     os.chown(tmp_file.name, uid, gid)
-    tmp_file.write(contents)
+    tmp_file.write(to_bytes(contents))
     tmp_file.flush()
     _safe_move(tmp_file, path)
 
@@ -352,18 +382,18 @@ def _safe_move(new_file, target_path):
    """
     if isinstance(new_file, str):
         new_path = new_file
-        with open(new_path, 'r') as new_file:
-            contents = new_file.read()
-    elif isinstance(new_file, file) or hasattr(new_file, 'file'): # NamedTemporaryFiles have a 'file' attribute
+        with open(new_path, 'rb') as new_file:
+            contents = to_str(new_file.read())
+    elif hasattr(new_file, "seek"):
         new_path = new_file.name
         new_file.seek(0)
-        contents = new_file.read()
+        contents = to_str(new_file.read())
     else:
         raise TypeError('Expected string, file, or NamedTemporaryFile instance')
 
     try:
-        with open(target_path, 'r') as old_file:
-            old_contents = old_file.read()
+        with open(target_path, 'rb') as old_file:
+            old_contents = to_str(old_file.read())
         if contents.strip() == old_contents.strip():
             os.remove(new_path)
             return
