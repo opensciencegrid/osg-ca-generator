@@ -80,7 +80,8 @@ class CA(object):
         self._write_openssl_config()
 
         # Generate the CA
-        _write_rsa_key(self.keypath)
+        if not os.path.exists(self.keypath):
+            _write_rsa_key(self.keypath)
         _, ca_contents, _ = _run_command(('openssl', 'req', '-sha256', '-new', '-x509', '-key', self.keypath,
                                           '-subj', subject, '-config', self._CONFIG_PATH, '-days', str(days)),
                                          'generate CA')
@@ -359,6 +360,8 @@ def _get_hostname():
     Returns the hostname of the current system, returns None if it can't
     get the hostname. Stolen from osg-test
     """
+    if "PRP-Node-Name" in os.environ:
+        return os.getenv("PRP-Node-Name")
     try:
         return socket.gethostbyaddr(socket.gethostname())[0]
     except socket.error:
