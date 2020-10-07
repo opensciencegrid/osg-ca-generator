@@ -360,8 +360,10 @@ def _get_hostname():
     Returns the hostname of the current system, returns None if it can't
     get the hostname. Stolen from osg-test
     """
-    if "OSG-FDQN" in os.environ:
-        return os.getenv("OSG-FDQN")
+    try:
+        return os.getenv('OSG_FQDN')
+    except KeyError:
+        pass
     try:
         return socket.gethostbyaddr(socket.gethostname())[0]
     except socket.error:
