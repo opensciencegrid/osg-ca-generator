@@ -23,7 +23,7 @@ DIST_FILES := bin/ lib/ Makefile
 # ------------------------------------------------------------------------------
 # Internal variables: Do not change for a release
 # ------------------------------------------------------------------------------
-PYTHON = python
+PYTHON = /usr/bin/python3
 
 DIST_DIR_PREFIX := dist_dir_
 TARBALL_DIR := $(PACKAGE)-$(VERSION)
@@ -56,6 +56,7 @@ install:
 	install -p -m 0755 $(SBIN_FILES) $(DESTDIR)/$(INSTALL_SBIN_DIR)
 	mkdir -p $(DESTDIR)/$(INSTALL_PYTHON_DIR)
 	install -p -m 0644 $(PYTHON_LIB_FILES) $(DESTDIR)/$(INSTALL_PYTHON_DIR)
+	sed -ri '1s,^#!/usr/bin/env python.*,#!$(PYTHON),' $(DESTDIR)/$(INSTALL_SBIN_DIR)/osg-ca-generator
 
 $(TARBALL_NAME): $(DIST_FILES)
 	$(eval TEMP_DIR := $(shell mktemp -d -p . $(DIST_DIR_PREFIX)XXXXXXXXXX))
