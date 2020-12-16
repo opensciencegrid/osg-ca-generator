@@ -6,6 +6,8 @@ import pwd
 import re
 import socket
 import tempfile
+import random
+import string
 from subprocess import Popen, PIPE
 
 
@@ -48,7 +50,10 @@ class CA(object):
     _OPENSSL_CA_PRIVATE_DIR = os.path.join(_OPENSSL_CA_DIR, 'private/')
     _CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-ca.conf')
     _EXT_CONFIG_PATH = os.path.join(_OPENSSL_DIR, 'tls', 'osg-test-extensions.conf')
-    _SERIAL_NUM = 'A1B2C3D4E5F6'
+    _SERIAL_NUM = ''
+    for i in range(12):
+        _SERIAL_NUM += random.choice(string.hexdigits)
+
 
     def __init__(self, subject, days=10, force=False):
         """
