@@ -203,3 +203,18 @@ FUNCTIONS
 DATA
     PIPE = -1
 ```
+
+Development
+-----------
+
+After merging changes into the `master` branch, update the submodule in
+[osg-test](https://github.com/opensciencegrid/osg-test):
+
+```
+git clone --recursive git@github.com:opensciencegrid/osg-test.git
+cd osg-test/osg-ca-generator
+git pull
+cd ..
+git add osg-ca-generator
+git commit -m 'Update the osg-ca-generator submodule'
+```
