@@ -52,6 +52,7 @@ ifneq ($(strip $(DIST_DIR_PREFIX)),) # avoid evil
 endif
 
 install:
+	$(PYTHON) -c "import sys; sys.exit(0)"
 	mkdir -p $(DESTDIR)/$(INSTALL_SBIN_DIR)
 	install -p -m 0755 $(SBIN_FILES) $(DESTDIR)/$(INSTALL_SBIN_DIR)
 	mkdir -p $(DESTDIR)/$(INSTALL_PYTHON_DIR)
