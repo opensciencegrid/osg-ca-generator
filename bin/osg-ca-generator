@@ -25,6 +25,8 @@ def main():
                  help='Set the user certificate\'s password')
     p.add_option('-v', '--voms', default='', dest='voms', metavar='VO',
                  help='Create files for Virtual Organization, VO')
+    p.add_option('--crl', action='store_true',
+                 help='Create a CRL for the test CA')
     opts, _ = p.parse_args()
 
     if opts.password and not opts.username:
@@ -65,6 +67,9 @@ def main():
             test_ca.usercert(opts.username, opts.password, opts.days)
         else:
             print('Skipped writing user cert due to existing cert at %s' % user_path)
+
+    if opts.crl:
+        test_ca.crl(opts.days)
 
 if __name__ == '__main__':
     try:
