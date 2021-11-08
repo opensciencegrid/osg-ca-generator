@@ -237,6 +237,8 @@ keyUsage=critical,digitalSignature,keyEncipherment,dataEncipherment
 extendedKeyUsage=serverAuth,clientAuth
 certificatePolicies=%s
 basicConstraints=critical,CA:false
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
 """ % (key_id, _get_hostname(), cert_policies)
 
         openssl_config = open('/etc/pki/tls/openssl.cnf', 'rb')
