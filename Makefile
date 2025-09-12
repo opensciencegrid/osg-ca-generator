@@ -30,7 +30,7 @@ TARBALL_DIR := $(PACKAGE)-$(VERSION)
 TARBALL_NAME := $(PACKAGE)-$(VERSION).tar.gz
 UPSTREAM := /p/vdt/public/html/upstream
 UPSTREAM_DIR := $(UPSTREAM)/$(PACKAGE)/$(VERSION)
-INSTALL_PYTHON_DIR := $(shell $(PYTHON) -c 'from sysconfig import get_path; print(get_path("platlib"))')
+INSTALL_PYTHON_DIR := $(shell $(PYTHON) -c 'from sysconfig import get_path; print(get_path("purelib"))')
 
 
 # ------------------------------------------------------------------------------
